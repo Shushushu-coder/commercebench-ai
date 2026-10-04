@@ -162,6 +162,57 @@ performance claim is made. `all-MiniLM-L6-v2` is English-oriented in
 this phase; this phase does not establish multilingual/Chinese
 retrieval quality.
 
+## Phase 1G — Hybrid RRF Retrieval Baseline
+
+Phase 1G adds the first hybrid retrieval baseline
+(`hybrid-bm25-minilm-rrf-v0`, retriever version `0.1`) on top of the
+existing components:
+
+- Sparse component: `bm25-okapi-v0` (Okapi BM25, `k1`, `b`).
+- Dense component: `dense-minilm-l6-v2-cosine-v0`
+  (`sentence-transformers/all-MiniLM-L6-v2` at the pinned immutable
+  revision, cosine similarity over normalized embeddings).
+- Fusion: Reciprocal Rank Fusion,
+  `RRF(d) = Σ_i 1 / (rrf_k + rank_i(d))` over each component's 1-based
+  ranks; a document absent from a component receives no contribution
+  from it. RRF is used because BM25 and cosine raw score scales are not
+  directly comparable — only ranks are fused, never raw scores. Final
+  ordering is RRF score descending, then `document_id` ascending;
+  `RetrievalResult.scores` are the RRF fusion scores.
+- `rrf_k` defaults to 60 and `component_top_k` to 10, each defined at
+  exactly one point (`DEFAULT_RRF_K` / `DEFAULT_COMPONENT_TOP_K`),
+  validated as positive integers, and declared in
+  `retrieval.parameters` so they enter the experiment fingerprint and
+  reach runtime.
+- `component_top_k` (each component's candidate depth into fusion) and
+  the pipeline `top_k` (final result depth) are separate concepts;
+  `component_top_k >= top_k` is enforced at the retrieval boundary.
+- The `sparse`/`dense` nested component configurations are required
+  and must carry every algorithm parameter the component declares
+  (`k1`/`b`; backend, version, model, revision, similarity,
+  normalization, dimension) — no component default is silently
+  applied, so the full component identity enters the fingerprint.
+  Only the two pinned component ids are accepted; a nested hybrid is
+  rejected.
+- Each run emits exactly one `RetrievalEvent` — the fused ranking.
+  The per-component rankings are recorded under
+  `runtime_metadata["hybrid"]["components"]` for diagnosis (for
+  example, which component contributed a hit) and are never written
+  as extra retrieval events. Component raw scores are diagnostic only
+  and must not be compared across retrievers.
+- `examples/rag_v0/experiments/rag_hybrid_rrf_v0.json` is a
+  development fixture on the same corpus and case list; compared with
+  `rag_bm25_v0` and `rag_dense_minilm_v0` only the retrieval strategy
+  configuration differs. On the `rag-refund-miss-001` development
+  fixture BM25 retrieves nothing (no lexical overlap) while the
+  fused ranking inherits the dense component's refund-policy hit —
+  an observed fixture difference, not a benchmark conclusion.
+  Combining retrieval systems is not guaranteed to improve ranking;
+  regressions are kept, not hidden.
+
+No reranker, no weighted raw-score fusion, and no formal benchmark
+performance claim is made in Phase 1G.
+
 ## Development
 
 Requires Python 3.10+. Installing the package pulls the pinned

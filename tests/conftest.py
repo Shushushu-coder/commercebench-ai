@@ -137,3 +137,8 @@ def bm25_manifest(rag_v0_dir: Path) -> ExperimentManifest:
 @pytest.fixture(scope="session")
 def dense_manifest(rag_v0_dir: Path) -> ExperimentManifest:
     return _load_manifest(rag_v0_dir, "rag_dense_minilm_v0.json")
+
+
+@pytest.fixture(scope="session")
+def hybrid_manifest(rag_v0_dir: Path) -> ExperimentManifest:
+    return _load_manifest(rag_v0_dir, "rag_hybrid_rrf_v0.json")

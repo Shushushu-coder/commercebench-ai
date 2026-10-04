@@ -4,7 +4,9 @@ Sparse retrievers (keyword, term-frequency, Okapi BM25) are
 deterministic, offline, stdlib-only development baselines. Phase 1E adds
 one dense baseline, ``dense-minilm-l6-v2-cosine-v0``: importing it is
 still stdlib-only, but actually retrieving loads the pinned
-sentence-transformers MiniLM model. No hybrid retrieval or reranking.
+sentence-transformers MiniLM model. Phase 1G adds the first hybrid
+baseline, ``hybrid-bm25-minilm-rrf-v0``: parallel BM25 + MiniLM
+retrieval fused by Reciprocal Rank Fusion. No reranking.
 """
 
 from .corpus import Corpus
@@ -31,6 +33,7 @@ from .dense import (
     EmbeddingEncoder,
     SentenceTransformerEncoder,
 )
+from .hybrid import HybridRRFRetriever
 
 __all__ = [
     "BM25Retriever",
@@ -40,6 +43,7 @@ __all__ = [
     "DeterministicRAGPipeline",
     "Document",
     "EmbeddingEncoder",
+    "HybridRRFRetriever",
     "KeywordMatchRetriever",
     "PIPELINE_PARAMETER_NAMES",
     "RAGRunResult",
