@@ -95,16 +95,20 @@ class DeterministicRAGPipeline:
             answer = self._answers.get(
                 result.document_ids[0], self._fallback_answer
             )
+        runtime_metadata = {
+            "retriever_id": self._retriever.retriever_id,
+            "retriever_version": self._retriever.retriever_version,
+            "corpus_id": self._corpus.corpus_id,
+            "corpus_version": self._corpus.corpus_version,
+            "top_k": self._top_k,
+        }
+        describe = getattr(self._retriever, "runtime_metadata", None)
+        if callable(describe):
+            runtime_metadata.update(describe())
         return RAGRunResult(
             output_text=answer,
             retrieval_event=event,
-            runtime_metadata={
-                "retriever_id": self._retriever.retriever_id,
-                "retriever_version": self._retriever.retriever_version,
-                "corpus_id": self._corpus.corpus_id,
-                "corpus_version": self._corpus.corpus_version,
-                "top_k": self._top_k,
-            },
+            runtime_metadata=runtime_metadata,
         )
 
 

@@ -110,15 +110,71 @@ deterministic baselines:
 
 No formal benchmark performance claim is made in Phase 1C.
 
+## Phase 1E — Dense Retrieval Baseline
+
+Phase 1E adds the first dense retrieval baseline
+(`dense-minilm-l6-v2-cosine-v0`, retriever version `0.1`) alongside the
+Phase 1A/1C sparse baselines:
+
+- Model: `sentence-transformers/all-MiniLM-L6-v2`, pinned to the
+  immutable revision `8b3219a92973c328a8e22fadcfa821b5dc75636a`. The
+  revision is passed to `SentenceTransformer` at load time; moving
+  references such as `main` are rejected by configuration validation.
+- Backend: `sentence-transformers` `6.1.0`, an exact pinned runtime
+  dependency in `pyproject.toml`. The configured
+  `embedding_backend_version` is checked against the installed package
+  version at model-load time.
+- Embedding dimension `384`, `L2`-normalized vectors
+  (`normalize_embeddings=true`), cosine similarity ranking. Every
+  embedding and every returned score is validated finite and
+  dimension-checked; NaN, infinities, zero-norm vectors, and dimension
+  mismatches raise `ContractValidationError` rather than entering a
+  `RetrievalResult` or `RunTrace`.
+- `EmbeddingEncoder` is the minimal internal boundary isolating model
+  loading, revision pinning, normalization, and output validation.
+  `SentenceTransformerEncoder` loads the model lazily on the first
+  `encode` call — never at module import — so unit tests inject a fake
+  encoder and stay offline.
+- `model_name`, `model_revision`, `embedding_backend`,
+  `embedding_backend_version`, `similarity`, `normalize_embeddings`,
+  and `expected_dimension` are declared retriever algorithm parameters:
+  they enter the experiment fingerprint and are enforced at runtime.
+  Undeclared keys are rejected as before.
+- Unlike the sparse `score > 0` policy, dense retrieval returns the
+  `top_k` documents for any non-empty corpus, including zero or
+  negative cosine scores. Corpus embeddings live in memory only — no
+  vector database, index, hybrid fusion, or reranking.
+- `examples/rag_v0/experiments/rag_dense_minilm_v0.json` is a
+  development fixture; compared with `rag_bm25_v0` only the retrieval
+  strategy configuration differs. On the `rag-refund-miss-001`
+  development fixture BM25 retrieves nothing (no lexical overlap)
+  while MiniLM ranks the refund policy first — an observed fixture
+  difference, not a benchmark conclusion.
+
+Tests: the default `python -m pytest` run is the fast, offline suite.
+The real pinned-model smoke is marked `integration` and deselected by
+default; run it explicitly with `python -m pytest -m integration`. The
+first run downloads the pinned model into the HuggingFace cache; later
+runs reuse that cache.
+
+This is a development retrieval baseline. No formal CommerceBench
+performance claim is made. `all-MiniLM-L6-v2` is English-oriented in
+this phase; this phase does not establish multilingual/Chinese
+retrieval quality.
+
 ## Development
 
-Requires Python 3.10+.
+Requires Python 3.10+. Installing the package pulls the pinned
+`sentence-transformers==6.1.0` runtime dependency (including torch);
+the embedding model itself is downloaded on first use, not at install
+time.
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
-python -m pytest
+python -m pytest                    # fast offline suite
+python -m pytest -m integration     # real pinned-model smoke
 ```
 
 ## Project layout

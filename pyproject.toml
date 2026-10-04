@@ -8,6 +8,9 @@ version = "0.1.0"
 description = "A reproducible benchmark and experimentation platform for evaluating LLM capabilities in commerce customer-service scenarios."
 readme = "README.md"
 requires-python = ">=3.10"
+dependencies = [
+    "sentence-transformers==6.1.0",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -19,3 +22,7 @@ include = ["commercebench*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "integration: tests that download and load the real pinned sentence-transformers model (excluded from the default run)",
+]
+addopts = "-m 'not integration'"

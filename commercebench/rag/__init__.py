@@ -1,8 +1,10 @@
 """Phase 1 RAG primitives: Document, Corpus, retrievers, pipeline.
 
-All retrievers here are deterministic, offline, stdlib-only development
-baselines — sparse retrieval only (keyword, term-frequency, Okapi BM25);
-no dense or hybrid retrieval.
+Sparse retrievers (keyword, term-frequency, Okapi BM25) are
+deterministic, offline, stdlib-only development baselines. Phase 1E adds
+one dense baseline, ``dense-minilm-l6-v2-cosine-v0``: importing it is
+still stdlib-only, but actually retrieving loads the pinned
+sentence-transformers MiniLM model. No hybrid retrieval or reranking.
 """
 
 from .corpus import Corpus
@@ -24,19 +26,27 @@ from .retrievers import (
     normalize_text,
     tokenize,
 )
+from .dense import (
+    DenseRetriever,
+    EmbeddingEncoder,
+    SentenceTransformerEncoder,
+)
 
 __all__ = [
     "BM25Retriever",
     "Corpus",
     "DEFAULT_FALLBACK_ANSWER",
+    "DenseRetriever",
     "DeterministicRAGPipeline",
     "Document",
+    "EmbeddingEncoder",
     "KeywordMatchRetriever",
     "PIPELINE_PARAMETER_NAMES",
     "RAGRunResult",
     "RETRIEVER_REGISTRY",
     "RetrievalResult",
     "Retriever",
+    "SentenceTransformerEncoder",
     "TermFrequencyRetriever",
     "build_retriever",
     "normalize_text",
