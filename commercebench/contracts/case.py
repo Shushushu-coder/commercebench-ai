@@ -55,6 +55,7 @@ class CaseSpec:
 
     required_facts: Tuple[str, ...] = ()
     forbidden_claims: Tuple[str, ...] = ()
+    relevant_document_ids: Tuple[str, ...] = ()
 
     expected_response: Optional[str] = None
 
@@ -111,6 +112,11 @@ class CaseSpec:
             "forbidden_claims",
             str_tuple(self.forbidden_claims, "forbidden_claims"),
         )
+        object.__setattr__(
+            self,
+            "relevant_document_ids",
+            str_tuple(self.relevant_document_ids, "relevant_document_ids"),
+        )
         if self.expected_response is not None:
             object.__setattr__(
                 self,
@@ -134,6 +140,7 @@ class CaseSpec:
             "user_input": self.user_input,
             "required_facts": list(self.required_facts),
             "forbidden_claims": list(self.forbidden_claims),
+            "relevant_document_ids": list(self.relevant_document_ids),
             "expected_response": self.expected_response,
             "metadata": dict(self.metadata),
         }
@@ -154,6 +161,7 @@ class CaseSpec:
                 user_input=data["user_input"],
                 required_facts=data.get("required_facts", ()),
                 forbidden_claims=data.get("forbidden_claims", ()),
+                relevant_document_ids=data.get("relevant_document_ids", ()),
                 expected_response=data.get("expected_response"),
                 metadata=data.get("metadata", {}),
             )

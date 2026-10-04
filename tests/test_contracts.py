@@ -115,6 +115,67 @@ class TestCaseSpecValidation:
         assert isinstance(case.required_facts, tuple)
 
 
+class TestCaseSpecRelevantDocumentIds:
+    def test_default_is_empty_tuple(self):
+        case = CaseSpec(**_case_kwargs())
+        assert case.relevant_document_ids == ()
+        assert isinstance(case.relevant_document_ids, tuple)
+
+    def test_valid_values_accepted(self):
+        case = CaseSpec(
+            **_case_kwargs(relevant_document_ids=("doc-001", "doc-002"))
+        )
+        assert case.relevant_document_ids == ("doc-001", "doc-002")
+
+    def test_list_normalized_to_tuple(self):
+        case = CaseSpec(
+            **_case_kwargs(relevant_document_ids=["doc-001", "doc-002"])
+        )
+        assert case.relevant_document_ids == ("doc-001", "doc-002")
+        assert isinstance(case.relevant_document_ids, tuple)
+
+    @pytest.mark.parametrize("bad_ids", [("",), ("doc-001", "")])
+    def test_empty_document_id_rejected(self, bad_ids):
+        with pytest.raises(ContractValidationError):
+            CaseSpec(**_case_kwargs(relevant_document_ids=bad_ids))
+
+    def test_dict_round_trip_preserves_ids(self):
+        case = CaseSpec(
+            **_case_kwargs(relevant_document_ids=("doc-001", "doc-002"))
+        )
+        restored = CaseSpec.from_dict(case.to_dict())
+        assert restored == case
+        assert restored.relevant_document_ids == ("doc-001", "doc-002")
+
+    def test_json_round_trip_preserves_ids(self):
+        case = CaseSpec(
+            **_case_kwargs(relevant_document_ids=("doc-001", "doc-002"))
+        )
+        restored = CaseSpec.from_json(case.to_json())
+        assert restored == case
+        assert restored.relevant_document_ids == ("doc-001", "doc-002")
+
+    def test_to_dict_serializes_as_list(self):
+        case = CaseSpec(**_case_kwargs(relevant_document_ids=("doc-001",)))
+        assert case.to_dict()["relevant_document_ids"] == ["doc-001"]
+
+    def test_legacy_dict_without_field_loads_empty(self):
+        data = _case_kwargs()
+        data["difficulty"] = "easy"
+        data["conversation_type"] = "single_turn"
+        data["answerability"] = "answerable"
+        loaded = CaseSpec.from_dict(data)
+        assert loaded.relevant_document_ids == ()
+
+    def test_legacy_json_without_field_loads_empty(self):
+        data = _case_kwargs()
+        data["difficulty"] = "easy"
+        data["conversation_type"] = "single_turn"
+        data["answerability"] = "answerable"
+        loaded = CaseSpec.from_json(json.dumps(data))
+        assert loaded.relevant_document_ids == ()
+
+
 class TestCaseSpecSerialization:
     def test_round_trip(self, case):
         assert CaseSpec.from_dict(case.to_dict()) == case
