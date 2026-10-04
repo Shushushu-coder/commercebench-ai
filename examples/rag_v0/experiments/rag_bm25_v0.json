@@ -1,0 +1,37 @@
+{
+  "schema_version": "0.1",
+  "experiment_id": "rag_bm25_v0",
+  "experiment_name": "RAG BM25 Okapi v0 (development retrieval-strategy comparison)",
+  "benchmark_version": "commercebench-dev-0.1",
+  "case_ids": [
+    "rag-return-window-001",
+    "rag-exchange-001",
+    "rag-return-exchange-001",
+    "rag-shipping-001",
+    "rag-refund-001",
+    "rag-coupon-001",
+    "rag-payment-001",
+    "rag-size-001",
+    "rag-warranty-001",
+    "rag-unknown-001",
+    "rag-refund-miss-001"
+  ],
+  "system_id": "deterministic-rag",
+  "system_version": "0.1",
+  "model": null,
+  "retrieval": {
+    "retriever_id": "bm25-okapi-v0",
+    "parameters": {
+      "top_k": 3,
+      "corpus_id": "commercebench-dev-corpus",
+      "corpus_version": "0.1",
+      "k1": 1.5,
+      "b": 0.75
+    }
+  },
+  "memory": null,
+  "evaluator_id": "deterministic-rag-v0",
+  "evaluator_version": "0.1",
+  "random_seed": 0,
+  "metadata": {"fixture": "development only", "ablation_pair": "rag_term_frequency_v0"}
+}

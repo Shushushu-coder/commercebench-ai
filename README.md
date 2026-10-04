@@ -77,6 +77,39 @@ They are not Dense Retrieval, BM25, Hybrid Retrieval, or production RAG
 systems. All files under `examples/rag_v0/` are development fixtures, not
 a benchmark, and no performance claim is made.
 
+## Phase 1C — BM25 Sparse Retrieval Baseline
+
+Phase 1C introduces an Okapi BM25 sparse retrieval baseline
+(`bm25-okapi-v0`, retriever version `0.1`) alongside the Phase 1A
+deterministic baselines:
+
+- Frozen formula variant: `score(D, Q) = Σ IDF(q) * f(q,D)(k1+1) /
+  (f(q,D) + k1(1-b+b|D|/avgdl))` over distinct normalized query tokens,
+  with the positive IDF variant
+  `IDF(q) = ln(1 + (N - n(q) + 0.5) / (n(q) + 0.5))`. Corpus statistics
+  are recomputed per `retrieve` call; there is no index or cache.
+- Defaults `k1 = 1.5` and `b = 0.75` are defined exactly once on
+  `BM25Retriever` (`DEFAULT_K1` / `DEFAULT_B`); validation requires
+  `k1 > 0` and `0 <= b <= 1` and rejects bools, NaN, infinities, and
+  non-numeric values.
+- Retriever algorithm parameters declared in `retrieval.parameters`
+  (`k1`, `b`) now flow through `build_retriever` into the runtime
+  retriever — they are applied, not just fingerprinted. Pipeline-level
+  keys (`top_k`, `corpus_id`, `corpus_version`) remain owned by
+  `DeterministicRAGSystem.from_manifest`; undeclared algorithm keys
+  (for example a `k11` typo) are rejected rather than silently ignored.
+- Tokenization reuses the Phase 1A development tokenizer (lowercase
+  ASCII `[a-z0-9]+` runs). It is not a multilingual tokenizer and no
+  Chinese sparse retrieval support is claimed.
+- `examples/rag_v0/experiments/rag_bm25_v0.json` is a development
+  fixture on the same synthetic corpus and case list; compared with
+  `rag_term_frequency_v0` only the retrieval strategy configuration
+  changes. On the `rag-coupon-001` development fixture the two produce
+  different rankings — an observed fixture difference, not a benchmark
+  conclusion.
+
+No formal benchmark performance claim is made in Phase 1C.
+
 ## Development
 
 Requires Python 3.10+.

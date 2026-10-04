@@ -63,7 +63,10 @@ class DeterministicRAGSystem:
 
         ``retrieval.parameters`` may carry ``top_k`` (default 3) and
         ``corpus_id``/``corpus_version``; when present, the corpus identity
-        is checked against the supplied ``corpus``.
+        is checked against the supplied ``corpus``. All remaining keys are
+        retriever algorithm parameters: ``build_retriever`` validates them
+        against the retriever's declared parameter names and applies them
+        to the runtime retriever.
         """
         if not isinstance(manifest, ExperimentManifest):
             raise ContractValidationError(

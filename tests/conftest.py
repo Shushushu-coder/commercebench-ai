@@ -127,3 +127,8 @@ def keyword_manifest(rag_v0_dir: Path) -> ExperimentManifest:
 @pytest.fixture(scope="session")
 def term_frequency_manifest(rag_v0_dir: Path) -> ExperimentManifest:
     return _load_manifest(rag_v0_dir, "rag_term_frequency_v0.json")
+
+
+@pytest.fixture(scope="session")
+def bm25_manifest(rag_v0_dir: Path) -> ExperimentManifest:
+    return _load_manifest(rag_v0_dir, "rag_bm25_v0.json")

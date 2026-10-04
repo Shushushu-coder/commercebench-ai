@@ -1,7 +1,8 @@
-"""Phase 1A RAG primitives: Document, Corpus, retrievers, pipeline.
+"""Phase 1 RAG primitives: Document, Corpus, retrievers, pipeline.
 
-All retrievers here are deterministic development baselines — not BM25,
-dense, or hybrid retrieval.
+All retrievers here are deterministic, offline, stdlib-only development
+baselines — sparse retrieval only (keyword, term-frequency, Okapi BM25);
+no dense or hybrid retrieval.
 """
 
 from .corpus import Corpus
@@ -12,6 +13,8 @@ from .pipeline import (
     RAGRunResult,
 )
 from .retrievers import (
+    BM25Retriever,
+    PIPELINE_PARAMETER_NAMES,
     RETRIEVER_REGISTRY,
     KeywordMatchRetriever,
     RetrievalResult,
@@ -23,11 +26,13 @@ from .retrievers import (
 )
 
 __all__ = [
+    "BM25Retriever",
     "Corpus",
     "DEFAULT_FALLBACK_ANSWER",
     "DeterministicRAGPipeline",
     "Document",
     "KeywordMatchRetriever",
+    "PIPELINE_PARAMETER_NAMES",
     "RAGRunResult",
     "RETRIEVER_REGISTRY",
     "RetrievalResult",
