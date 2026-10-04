@@ -1,0 +1,19 @@
+{
+  "schema_version": "0.1",
+  "case_id": "product_return_policy_001",
+  "benchmark_version": "commercebench-dev-0.1",
+  "task_family": "grounded_qa",
+  "intent": "return",
+  "difficulty": "easy",
+  "conversation_type": "single_turn",
+  "answerability": "answerable",
+  "user_input": "商品签收后多久可以退货？",
+  "required_facts": [
+    "30天"
+  ],
+  "forbidden_claims": [
+    "90天"
+  ],
+  "expected_response": "商品签收后30天内可以申请退货。",
+  "metadata": {}
+}

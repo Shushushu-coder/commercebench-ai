@@ -1,0 +1,18 @@
+{
+  "schema_version": "0.1",
+  "experiment_id": "phase0_deterministic_smoke",
+  "experiment_name": "Phase 0 deterministic smoke",
+  "benchmark_version": "commercebench-dev-0.1",
+  "case_ids": [
+    "product_return_policy_001"
+  ],
+  "system_id": "deterministic-baseline",
+  "system_version": "0.1",
+  "model": null,
+  "retrieval": null,
+  "memory": null,
+  "evaluator_id": "deterministic-v0",
+  "evaluator_version": "0.1",
+  "random_seed": 0,
+  "metadata": {}
+}
