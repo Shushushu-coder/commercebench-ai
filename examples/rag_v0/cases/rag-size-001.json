@@ -1,0 +1,16 @@
+{
+  "schema_version": "0.1",
+  "case_id": "rag-size-001",
+  "benchmark_version": "commercebench-dev-0.1",
+  "task_family": "grounded_qa",
+  "intent": "product_size",
+  "difficulty": "easy",
+  "conversation_type": "single_turn",
+  "answerability": "answerable",
+  "user_input": "shoe size choose usual",
+  "required_facts": ["one size up"],
+  "forbidden_claims": ["true to size"],
+  "relevant_document_ids": ["product-size-001"],
+  "expected_response": "The trail shoe runs small; choose one size up from your usual size.",
+  "metadata": {"fixture": "development only"}
+}

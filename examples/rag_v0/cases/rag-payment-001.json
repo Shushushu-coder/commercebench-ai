@@ -1,0 +1,16 @@
+{
+  "schema_version": "0.1",
+  "case_id": "rag-payment-001",
+  "benchmark_version": "commercebench-dev-0.1",
+  "task_family": "grounded_qa",
+  "intent": "payment",
+  "difficulty": "easy",
+  "conversation_type": "single_turn",
+  "answerability": "answerable",
+  "user_input": "credit cards wallet balance",
+  "required_facts": ["credit cards"],
+  "forbidden_claims": ["cash on delivery"],
+  "relevant_document_ids": ["policy-payment-001"],
+  "expected_response": "We accept credit cards, debit cards, and wallet balance.",
+  "metadata": {"fixture": "development only"}
+}

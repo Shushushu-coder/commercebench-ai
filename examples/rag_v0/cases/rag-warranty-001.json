@@ -1,0 +1,16 @@
+{
+  "schema_version": "0.1",
+  "case_id": "rag-warranty-001",
+  "benchmark_version": "commercebench-dev-0.1",
+  "task_family": "grounded_qa",
+  "intent": "warranty",
+  "difficulty": "easy",
+  "conversation_type": "single_turn",
+  "answerability": "answerable",
+  "user_input": "warranty manufacturing defects accidental",
+  "required_facts": ["one year warranty"],
+  "forbidden_claims": ["lifetime warranty"],
+  "relevant_document_ids": ["policy-warranty-001"],
+  "expected_response": "Every product includes a one year warranty covering manufacturing defects.",
+  "metadata": {"fixture": "development only"}
+}

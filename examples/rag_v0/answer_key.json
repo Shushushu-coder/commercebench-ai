@@ -1,0 +1,15 @@
+{
+  "_comment": "Phase 1A development fixture only: fixed document_id -> answer map used by DeterministicRAGPipeline. Not part of the Document contract and not a generation architecture.",
+  "answers": {
+    "policy-return-001": "Items may be returned within 30 days of delivery.",
+    "policy-exchange-001": "Items may be exchanged for a different size or color within 30 days.",
+    "policy-shipping-001": "Standard shipping takes 5 to 7 business days; express shipping takes 2 business days.",
+    "policy-refund-001": "Refunds are issued to the original payment method within 10 business days.",
+    "policy-coupon-001": "Each order may apply one coupon code at checkout.",
+    "policy-promo-001": "The seasonal discount cannot combine with any other discount.",
+    "policy-payment-001": "We accept credit cards, debit cards, and wallet balance.",
+    "policy-warranty-001": "Every product includes a one year warranty covering manufacturing defects.",
+    "product-size-001": "The trail shoe runs small; choose one size up from your usual size.",
+    "product-material-001": "The jacket uses recycled nylon and polyester fleece."
+  }
+}

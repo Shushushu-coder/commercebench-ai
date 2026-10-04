@@ -1,0 +1,16 @@
+{
+  "schema_version": "0.1",
+  "case_id": "rag-exchange-001",
+  "benchmark_version": "commercebench-dev-0.1",
+  "task_family": "grounded_qa",
+  "intent": "exchange",
+  "difficulty": "easy",
+  "conversation_type": "single_turn",
+  "answerability": "answerable",
+  "user_input": "exchange different size color",
+  "required_facts": ["30 days"],
+  "forbidden_claims": ["60 days"],
+  "relevant_document_ids": ["policy-exchange-001"],
+  "expected_response": "Items may be exchanged for a different size or color within 30 days.",
+  "metadata": {"fixture": "development only"}
+}

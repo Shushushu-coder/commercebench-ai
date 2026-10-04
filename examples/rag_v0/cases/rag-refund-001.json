@@ -1,0 +1,16 @@
+{
+  "schema_version": "0.1",
+  "case_id": "rag-refund-001",
+  "benchmark_version": "commercebench-dev-0.1",
+  "task_family": "grounded_qa",
+  "intent": "refund",
+  "difficulty": "easy",
+  "conversation_type": "single_turn",
+  "answerability": "answerable",
+  "user_input": "refund payment method",
+  "required_facts": ["10 business days"],
+  "forbidden_claims": ["instant"],
+  "relevant_document_ids": ["policy-refund-001"],
+  "expected_response": "Refunds are issued to the original payment method within 10 business days.",
+  "metadata": {"fixture": "development only"}
+}

@@ -1,0 +1,56 @@
+{
+  "corpus_id": "commercebench-dev-corpus",
+  "corpus_version": "0.1",
+  "documents": [
+    {
+      "document_id": "policy-return-001",
+      "text": "Customers may return unused items in original packaging within 30 days of delivery. The return label is included in every parcel.",
+      "metadata": {"topic": "return_policy"}
+    },
+    {
+      "document_id": "policy-exchange-001",
+      "text": "Customers may exchange items for a different size or color within 30 days of delivery at no extra cost.",
+      "metadata": {"topic": "exchange_policy"}
+    },
+    {
+      "document_id": "policy-shipping-001",
+      "text": "Standard shipping takes 5 to 7 business days. Express shipping takes 2 business days and costs 12 dollars.",
+      "metadata": {"topic": "shipping_policy"}
+    },
+    {
+      "document_id": "policy-refund-001",
+      "text": "A refund is issued to the original payment method within 10 business days after the returned item passes inspection.",
+      "metadata": {"topic": "refund_policy"}
+    },
+    {
+      "document_id": "policy-coupon-001",
+      "text": "Each order may apply one coupon code at checkout and coupons cannot be combined.",
+      "metadata": {"topic": "coupon_policy"}
+    },
+    {
+      "document_id": "policy-promo-001",
+      "text": "The seasonal discount applies a discount to every order and this discount cannot combine with any other discount.",
+      "metadata": {"topic": "promotion_policy"}
+    },
+    {
+      "document_id": "policy-payment-001",
+      "text": "Payments accept credit cards debit cards and wallet balance. Cash on delivery is not supported.",
+      "metadata": {"topic": "payment_policy"}
+    },
+    {
+      "document_id": "policy-warranty-001",
+      "text": "Every product includes a one year warranty that covers manufacturing defects. Accidental damage is not covered.",
+      "metadata": {"topic": "warranty_policy"}
+    },
+    {
+      "document_id": "product-size-001",
+      "text": "The trail shoe runs small; choose one size up from your usual size. Available sizes range from 36 to 46.",
+      "metadata": {"topic": "product_size"}
+    },
+    {
+      "document_id": "product-material-001",
+      "text": "The jacket shell uses recycled nylon and the lining uses polyester fleece for warmth.",
+      "metadata": {"topic": "product_material"}
+    }
+  ]
+}

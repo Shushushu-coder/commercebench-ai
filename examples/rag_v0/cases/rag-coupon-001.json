@@ -1,0 +1,19 @@
+{
+  "schema_version": "0.1",
+  "case_id": "rag-coupon-001",
+  "benchmark_version": "commercebench-dev-0.1",
+  "task_family": "grounded_qa",
+  "intent": "coupon",
+  "difficulty": "medium",
+  "conversation_type": "single_turn",
+  "answerability": "answerable",
+  "user_input": "coupon discount code checkout",
+  "required_facts": ["one coupon code"],
+  "forbidden_claims": ["unlimited coupons"],
+  "relevant_document_ids": ["policy-coupon-001"],
+  "expected_response": "Each order may apply one coupon code at checkout.",
+  "metadata": {
+    "fixture": "development only",
+    "note": "controlled-ablation anchor: keyword-match ranks policy-coupon-001 first, term-frequency ranks the repeated-term distractor policy-promo-001 first"
+  }
+}

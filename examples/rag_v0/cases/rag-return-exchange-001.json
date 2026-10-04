@@ -1,0 +1,16 @@
+{
+  "schema_version": "0.1",
+  "case_id": "rag-return-exchange-001",
+  "benchmark_version": "commercebench-dev-0.1",
+  "task_family": "grounded_qa",
+  "intent": "return_exchange",
+  "difficulty": "medium",
+  "conversation_type": "single_turn",
+  "answerability": "answerable",
+  "user_input": "return exchange items delivery",
+  "required_facts": ["30 days"],
+  "forbidden_claims": ["90 days"],
+  "relevant_document_ids": ["policy-return-001", "policy-exchange-001"],
+  "expected_response": null,
+  "metadata": {"fixture": "development only", "note": "multiple relevant documents"}
+}

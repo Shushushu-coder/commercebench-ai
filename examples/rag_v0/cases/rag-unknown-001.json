@@ -1,0 +1,19 @@
+{
+  "schema_version": "0.1",
+  "case_id": "rag-unknown-001",
+  "benchmark_version": "commercebench-dev-0.1",
+  "task_family": "grounded_qa",
+  "intent": "out_of_scope",
+  "difficulty": "medium",
+  "conversation_type": "single_turn",
+  "answerability": "insufficient_information",
+  "user_input": "restaurant reservation opening hours",
+  "required_facts": [],
+  "forbidden_claims": ["30 days"],
+  "relevant_document_ids": [],
+  "expected_response": "I am sorry, I could not find an answer in the knowledge base.",
+  "metadata": {
+    "fixture": "development only",
+    "note": "no relevant document: retrieval metrics report not_applicable"
+  }
+}

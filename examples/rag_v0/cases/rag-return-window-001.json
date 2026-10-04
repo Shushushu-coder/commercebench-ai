@@ -1,0 +1,16 @@
+{
+  "schema_version": "0.1",
+  "case_id": "rag-return-window-001",
+  "benchmark_version": "commercebench-dev-0.1",
+  "task_family": "grounded_qa",
+  "intent": "return",
+  "difficulty": "easy",
+  "conversation_type": "single_turn",
+  "answerability": "answerable",
+  "user_input": "how many days can I return items",
+  "required_facts": ["30 days"],
+  "forbidden_claims": ["90 days"],
+  "relevant_document_ids": ["policy-return-001"],
+  "expected_response": "Items may be returned within 30 days of delivery.",
+  "metadata": {"fixture": "development only"}
+}

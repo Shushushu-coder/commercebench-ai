@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+from typing import Dict, Mapping
+
 import pytest
 
 from commercebench.contracts import (
@@ -14,8 +18,11 @@ from commercebench.contracts import (
     UsageStats,
 )
 from commercebench.contracts.trace import RunTrace
+from commercebench.rag import Corpus
 
 BENCHMARK_VERSION = "commercebench-dev-0.1"
+
+RAG_V0_DIR = Path(__file__).resolve().parents[1] / "examples" / "rag_v0"
 
 
 @pytest.fixture
@@ -75,3 +82,48 @@ def trace(case: CaseSpec, manifest: ExperimentManifest) -> RunTrace:
         usage=UsageStats(input_tokens=0, output_tokens=0, total_tokens=0),
         runtime_metadata={},
     )
+
+
+@pytest.fixture(scope="session")
+def rag_v0_dir() -> Path:
+    return RAG_V0_DIR
+
+
+@pytest.fixture(scope="session")
+def rag_corpus(rag_v0_dir: Path) -> Corpus:
+    return Corpus.from_json(
+        (rag_v0_dir / "corpus.json").read_text(encoding="utf-8")
+    )
+
+
+@pytest.fixture(scope="session")
+def rag_answers(rag_v0_dir: Path) -> Mapping[str, str]:
+    payload = json.loads(
+        (rag_v0_dir / "answer_key.json").read_text(encoding="utf-8")
+    )
+    return payload["answers"]
+
+
+@pytest.fixture(scope="session")
+def rag_cases(rag_v0_dir: Path) -> Dict[str, CaseSpec]:
+    cases = {}
+    for path in sorted((rag_v0_dir / "cases").glob("*.json")):
+        case = CaseSpec.from_json(path.read_text(encoding="utf-8"))
+        cases[case.case_id] = case
+    return cases
+
+
+def _load_manifest(rag_v0_dir: Path, name: str) -> ExperimentManifest:
+    return ExperimentManifest.from_json(
+        (rag_v0_dir / "experiments" / name).read_text(encoding="utf-8")
+    )
+
+
+@pytest.fixture(scope="session")
+def keyword_manifest(rag_v0_dir: Path) -> ExperimentManifest:
+    return _load_manifest(rag_v0_dir, "rag_keyword_v0.json")
+
+
+@pytest.fixture(scope="session")
+def term_frequency_manifest(rag_v0_dir: Path) -> ExperimentManifest:
+    return _load_manifest(rag_v0_dir, "rag_term_frequency_v0.json")

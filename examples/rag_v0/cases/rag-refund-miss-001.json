@@ -1,0 +1,19 @@
+{
+  "schema_version": "0.1",
+  "case_id": "rag-refund-miss-001",
+  "benchmark_version": "commercebench-dev-0.1",
+  "task_family": "grounded_qa",
+  "intent": "refund",
+  "difficulty": "hard",
+  "conversation_type": "single_turn",
+  "answerability": "answerable",
+  "user_input": "Can I get my money back if I change my mind",
+  "required_facts": [],
+  "forbidden_claims": ["instant refund"],
+  "relevant_document_ids": ["policy-refund-001"],
+  "expected_response": "I am sorry, I could not find an answer in the knowledge base.",
+  "metadata": {
+    "fixture": "development only",
+    "note": "vocabulary mismatch: relevant doc exists but shares no query tokens, so retrieval misses and RETRIEVAL_MISS fires"
+  }
+}
