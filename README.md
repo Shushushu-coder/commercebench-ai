@@ -318,6 +318,50 @@ reranker score was — without re-running the model. Retrieval metrics,
 generation, experiment fingerprints, and the `RetrievalEvent`/`RunTrace`
 schemas are unchanged.
 
+## Phase 2E — Reranker Failure Analysis / Reporting
+
+Phase 2E adds a pure reporting layer (`commercebench/reporting/`) over
+the persisted Phase 2D evidence. Analysis is derived from persisted
+benchmark evidence — `CaseSpec` + `RunTrace` (+ `EvaluationResult` for
+cross-check only). No reranker/model call is required, and no core
+schema (`RunTrace`, `RetrievalEvent`, `ExperimentManifest`,
+`EvaluationResult`) is modified.
+
+- `analyze_reranker_case(case, trace, evaluation=None)` builds a
+  `RerankerCaseAnalysis`: per-document rank movement (`rank_delta =
+  candidate_rank - reranker_rank`, so positive means moved up),
+  `top_k_entered` / `top_k_exited`, `candidate_top1` / `final_top1` /
+  `top1_changed`, the generation-driving document (final top-1),
+  cutoff diagnostics (`cutoff_score`, `next_below_cutoff_score`,
+  `cutoff_margin` — a raw-logit score difference, not a calibrated
+  confidence measure), depth-matched candidate/final MRR and Recall@K
+  with deltas, and deterministic relevant-document observations
+  (`relevant_rank_improved`, `relevant_rank_regressed`,
+  entered/exited-final flags).
+- Candidate MRR/Recall baselines are computed over the candidate window
+  `candidate[:final_top_k]` — the same depth as the final ranking — so
+  deltas compare like with like and an Identity run always reports zero
+  deltas. Full-ranking movement (including ranks beyond the final
+  cutoff) is tracked separately via the full reranker relevant rank.
+- RRF scores and CrossEncoder logits are not directly comparable: ranks
+  may be compared across stages, but score magnitudes are never
+  subtracted or fused. `EvaluationResult` metrics are cross-checked
+  (derived final MRR/Recall must match) but never extended.
+- `compare_reranker_runs(baseline, treatment, ...)` compares Identity vs
+  CrossEncoder runs for one case after verifying the controlled
+  conditions (same case/query/corpus/retriever/candidates/final depth);
+  generation change is decided from the traces' actual outputs.
+  `summarize_reranker_comparison(...)` aggregates deterministic
+  counts/rates only — no overall score, no significance testing.
+- On the 11 development cases the deterministic observation is: 0
+  relevant-rank improvements, 0 regressions, 1 top-1 change, 1
+  generation change, MRR unchanged on all 10 relevance-applicable
+  cases. `rag-return-exchange-001` shows metric equivalence without
+  behavior equivalence: MRR stays 1.0 while the top-1 relevant document
+  (`policy-exchange-001` → `policy-return-001`) and the generated
+  answer change. Observations are reported, never claimed as formal
+  benchmark conclusions.
+
 ## Development
 
 Requires Python 3.10+. Installing the package pulls the pinned
