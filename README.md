@@ -362,6 +362,52 @@ schema (`RunTrace`, `RetrievalEvent`, `ExperimentManifest`,
   answer change. Observations are reported, never claimed as formal
   benchmark conclusions.
 
+## Phase 2G — Failure Attribution Reporting
+
+Phase 2G implements the Phase 2F failure taxonomy as a pure reporting
+derivation (`commercebench/reporting/failure_attribution.py`) without
+changing `EvaluationResult.failure_categories`, without adding a core
+failure enum, and without calling any model.
+
+`RETRIEVAL_MISS` remains the backward-compatible final retrieval outcome.
+
+Reporting derives whether a reranked miss was already present in the
+same-depth candidate window or introduced by reranking.
+
+Rank movement, top-1 change, generation change, and cutoff margin are
+diagnostic observations, not formal failures.
+
+- `analyze_failure_attribution(case, trace, evaluation,
+  reranker_analysis=None)` builds a `FailureAttributionReport`:
+  `formal_failures` mirrors `EvaluationResult.failure_categories`,
+  `passed` mirrors `EvaluationResult.passed`, `attributions` holds one
+  stage entry per formal failure (multi-label, never a single forced
+  root cause), `retrieval_miss_attribution` carries the evidence-rich
+  retrieval derivation only when the formal miss exists, and
+  `diagnostic_observations` holds reporting-only facts.
+- Same-depth rule: `candidate_window = candidate[:final_top_k]`.
+  `candidate_hit` / `final_hit` are any-hit set intersections over the
+  window vs final ranking. State A (miss, miss) attributes
+  `retrieval_originated` (stage `retrieval`); State B (hit, miss)
+  attributes `reranker_induced` (stage `reranker`) — the only
+  deterministic reranker-induced final-miss predicate; State C (miss,
+  hit) is a `RERANKER_RESCUED_RELEVANT` observation, not attribution;
+  State D (hit, hit) has no retrieval failure.
+- Legacy single-event traces with a formal miss attribute
+  `origin = unknown` with `evidence_complete = False` without guessing;
+  `relevant == ()` with a formal miss, formal-miss/final-hit
+  contradictions, broken `passed` invariants, and unknown formal
+  strings all fail closed.
+- Generation failures (`EXACT_MATCH_FAILED`,
+  `REQUIRED_FACT_MISSING`, `FORBIDDEN_CLAIM_PRESENT`) map to stage
+  `generation` directly from the formal categories.
+- `derive_comparison_observations(comparison)` maps an existing
+  `RerankerComparison` to `TOP1_CHANGED` / `GENERATION_CHANGED` (plus
+  rank-movement flags) without recomputing the comparison.
+- All new objects are JSON-compatible with `to_dict()` / `from_dict()`
+  roundtrip stability; `cutoff_margin` is reused numeric evidence from
+  Phase 2E and never thresholded into a failure.
+
 ## Development
 
 Requires Python 3.10+. Installing the package pulls the pinned
