@@ -18,6 +18,7 @@ from .experiment import (
 from .trace import (
     MemoryEvent,
     RetrievalEvent,
+    RetrievalRole,
     RunTrace,
     ToolEvent,
     UsageStats,
@@ -38,6 +39,7 @@ __all__ = [
     "ModelConfig",
     "RetrievalConfig",
     "RetrievalEvent",
+    "RetrievalRole",
     "RunTrace",
     "ToolEvent",
     "UsageStats",

@@ -9,13 +9,15 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Any, Dict, Tuple
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
 
 from .common import (
     dumps_dict,
     ensure_json_compatible,
     expect_mapping,
     optional_non_negative_int,
+    parse_enum,
     require_iso8601,
     require_json_dict,
     require_non_empty_str,
@@ -26,13 +28,32 @@ from .common import (
 from .errors import ContractValidationError
 
 
+class RetrievalRole(str, Enum):
+    """Role of a ``RetrievalEvent`` within a run (Phase 2A)."""
+
+    CANDIDATE = "candidate"
+    FINAL = "final"
+
+
 @dataclass(frozen=True)
 class RetrievalEvent:
-    """One retrieval step. Phase 0 defines the shape only; no retriever exists."""
+    """One retrieval step recorded in a run.
+
+    ``role`` selects how the ranking is treated (Phase 2A):
+
+    - ``RetrievalRole.CANDIDATE``: intermediate ranking for diagnostics;
+      excluded from retrieval evaluation.
+    - ``RetrievalRole.FINAL``: the evaluation-visible retrieval ranking —
+      what downstream context/generation consumes and what retrieval
+      metrics are computed from.
+    - ``None`` (default): legacy Phase 1 traces carry no role; they are
+      interpreted as ``FINAL`` for backward compatibility.
+    """
 
     query: str
     document_ids: Tuple[str, ...] = ()
     scores: Tuple[float, ...] = ()
+    role: Optional[RetrievalRole] = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -54,12 +75,17 @@ class RetrievalEvent:
             raise ContractValidationError(
                 "document_ids and scores must have the same length"
             )
+        if self.role is not None:
+            object.__setattr__(
+                self, "role", parse_enum(RetrievalRole, self.role, "role")
+            )
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "query": self.query,
             "document_ids": list(self.document_ids),
             "scores": list(self.scores),
+            "role": self.role.value if self.role is not None else None,
         }
 
     @classmethod
@@ -70,6 +96,7 @@ class RetrievalEvent:
                 query=data["query"],
                 document_ids=data.get("document_ids", ()),
                 scores=data.get("scores", ()),
+                role=data.get("role"),
             )
         except KeyError as exc:
             raise ContractValidationError(
@@ -356,6 +383,38 @@ class RunTrace:
             raise ContractValidationError(f"RunTrace invalid JSON: {exc}") from exc
         return cls.from_dict(data)
 
+    @property
+    def final_retrieval_events(self) -> Tuple[RetrievalEvent, ...]:
+        """Evaluation-visible retrieval events, in trace order.
+
+        An event is evaluation-visible when ``role`` is
+        ``RetrievalRole.FINAL`` or ``None`` (legacy Phase 1 semantics).
+        ``CANDIDATE`` events are diagnostic and never included.
+        """
+        return tuple(
+            event
+            for event in self.retrieval_events
+            if event.role is None or event.role is RetrievalRole.FINAL
+        )
+
+    @property
+    def final_ranked_document_ids(self) -> Tuple[str, ...]:
+        """Document IDs from evaluation-visible final retrieval events only.
+
+        Final events are concatenated in trace order and de-duplicated
+        keep-first, so ``final_ranked_document_ids[i]`` is the rank
+        ``i + 1`` result of the final ranking. ``CANDIDATE`` events never
+        contribute; a trace with only candidate events yields ``()``.
+        """
+        seen = set()
+        ordered: List[str] = []
+        for event in self.final_retrieval_events:
+            for document_id in event.document_ids:
+                if document_id not in seen:
+                    seen.add(document_id)
+                    ordered.append(document_id)
+        return tuple(ordered)
+
 
 def _event_tuple(value: Any, event_cls: Any, field_name: str) -> Tuple[Any, ...]:
     if not isinstance(value, (list, tuple)):
@@ -378,6 +437,7 @@ def _event_tuple(value: Any, event_cls: Any, field_name: str) -> Tuple[Any, ...]
 __all__ = [
     "MemoryEvent",
     "RetrievalEvent",
+    "RetrievalRole",
     "RunTrace",
     "ToolEvent",
     "UsageStats",

@@ -19,6 +19,11 @@ Failure categories: ``RETRIEVAL_MISS`` is added when the case defines
 relevant documents and none of them appear in the complete retrieved list.
 In the combined evaluator this makes the result fail, consistent with the
 Phase 0 convention that ``passed = (no failure categories)``.
+
+Retrieval metrics are computed from final retrieval events only
+(``RetrievalEvent.role`` is ``FINAL`` or absent — legacy Phase 1
+semantics). ``CANDIDATE`` events are diagnostic intermediate rankings
+and do not count as retrieved documents.
 """
 
 from __future__ import annotations
@@ -99,20 +104,15 @@ def ndcg_at_k(
 
 
 def ranked_document_ids(trace: RunTrace) -> Tuple[str, ...]:
-    """Ordered, de-duplicated retrieved ids across all retrieval events.
+    """Evaluation-visible final ranking for retrieval metrics.
 
-    ``document_ids[i]`` inside each event is the rank ``i + 1`` result;
-    Phase 1A emits exactly one event per run. De-duplication keeps the
-    first (best) rank if a document ever appears twice.
+    Only ``RetrievalEvent.role`` ``FINAL`` and legacy no-role events
+    contribute; ``CANDIDATE`` events are diagnostics and never enter
+    retrieval metrics. Final events are concatenated in trace order and
+    de-duplicated keep-first, so ``document_ids[i]`` of the result is the
+    rank ``i + 1`` retrieved document.
     """
-    seen = set()
-    ordered: List[str] = []
-    for event in trace.retrieval_events:
-        for document_id in event.document_ids:
-            if document_id not in seen:
-                seen.add(document_id)
-                ordered.append(document_id)
-    return tuple(ordered)
+    return trace.final_ranked_document_ids
 
 
 class RetrievalEvaluator:

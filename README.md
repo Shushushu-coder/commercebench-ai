@@ -213,6 +213,33 @@ existing components:
 No reranker, no weighted raw-score fusion, and no formal benchmark
 performance claim is made in Phase 1G.
 
+## Phase 2A — Retrieval Role Contract
+
+Phase 2A adds `RetrievalEvent.role` to distinguish multi-stage retrieval
+inside one `RunTrace`:
+
+- `candidate` — a diagnostic intermediate ranking (for example, an
+  initial retrieval ranking that a later stage may reorder). Candidate
+  events are never counted as retrieved documents.
+- `final` — the evaluation-visible ranking: what downstream
+  context/generation consumes and what retrieval metrics are computed
+  from.
+- no `role` (legacy) — Phase 1A–1G traces carry no role field; they are
+  interpreted as `final`, so historical traces remain valid without
+  migration. Unknown roles are rejected when loading.
+
+`RunTrace.final_retrieval_events` selects the evaluation-visible events
+(`final` plus legacy) and `RunTrace.final_ranked_document_ids`
+concatenates them in trace order with keep-first de-duplication —
+`ranked_document_ids(trace)` in the retrieval evaluator resolves through
+this single helper, so Recall@K, Precision@K, MRR, NDCG@K and
+`RETRIEVAL_MISS` all observe the same final ranking. A trace with only
+candidate events has an empty final ranking and evaluates as a retrieval
+miss, never silently promoting a candidate to final.
+
+This change prepares the trace contract for reranking.
+No reranker is implemented in Phase 2A.
+
 ## Development
 
 Requires Python 3.10+. Installing the package pulls the pinned
