@@ -13,6 +13,7 @@ from .experiment import (
     ExperimentManifest,
     MemoryConfig,
     ModelConfig,
+    RerankerConfig,
     RetrievalConfig,
 )
 from .trace import (
@@ -37,6 +38,7 @@ __all__ = [
     "MemoryEvent",
     "MetricResult",
     "ModelConfig",
+    "RerankerConfig",
     "RetrievalConfig",
     "RetrievalEvent",
     "RetrievalRole",

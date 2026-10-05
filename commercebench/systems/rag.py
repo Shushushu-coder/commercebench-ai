@@ -1,9 +1,11 @@
-"""DeterministicRAGSystem: a SystemUnderTest wrapping the Phase 1A pipeline.
+"""DeterministicRAGSystem: a SystemUnderTest wrapping the RAG pipeline.
 
 The system is a thin adapter: it owns the benchmark-facing identity
 (``system_id``/``system_version``) and delegates generation to a
 ``DeterministicRAGPipeline``, so the existing ``run_case`` runner works
-unchanged.
+unchanged. Phase 2B optionally wires ``manifest.reranker`` through
+``build_reranker`` into the pipeline; without it the legacy single-event
+behavior is preserved.
 """
 
 from __future__ import annotations
@@ -47,7 +49,7 @@ class DeterministicRAGSystem:
         return SystemOutput(
             output_text=result.output_text,
             usage=UsageStats(input_tokens=0, output_tokens=0, total_tokens=0),
-            retrieval_events=(result.retrieval_event,),
+            retrieval_events=tuple(result.retrieval_events),
             runtime_metadata=dict(result.runtime_metadata),
         )
 
@@ -59,7 +61,7 @@ class DeterministicRAGSystem:
         answer_by_document_id: Optional[Mapping[str, str]] = None,
         fallback_answer: str = DEFAULT_FALLBACK_ANSWER,
     ) -> "DeterministicRAGSystem":
-        """Build a system wired from ``manifest.retrieval``.
+        """Build a system wired from ``manifest.retrieval`` (+ reranker).
 
         ``retrieval.parameters`` may carry ``top_k`` (default 3) and
         ``corpus_id``/``corpus_version``; when present, the corpus identity
@@ -67,6 +69,12 @@ class DeterministicRAGSystem:
         retriever algorithm parameters: ``build_retriever`` validates them
         against the retriever's declared parameter names and applies them
         to the runtime retriever.
+
+        When ``manifest.reranker`` is present it is built with
+        ``build_reranker`` and wired into the pipeline. ``top_k`` keeps
+        its meaning as the final depth; the reranker's ``candidate_top_k``
+        is the candidate depth and must satisfy
+        ``candidate_top_k >= top_k`` (enforced by the pipeline).
         """
         if not isinstance(manifest, ExperimentManifest):
             raise ContractValidationError(
@@ -96,12 +104,18 @@ class DeterministicRAGSystem:
             )
         top_k = parameters.get("top_k", DEFAULT_TOP_K)
         retriever: Retriever = build_retriever(manifest.retrieval)
+        reranker = None
+        if manifest.reranker is not None:
+            from commercebench.reranking import build_reranker as _build_reranker
+
+            reranker = _build_reranker(manifest.reranker)
         pipeline = DeterministicRAGPipeline(
             retriever=retriever,
             corpus=corpus,
             top_k=top_k,
             answer_by_document_id=answer_by_document_id,
             fallback_answer=fallback_answer,
+            reranker=reranker,
         )
         return cls(
             pipeline=pipeline,

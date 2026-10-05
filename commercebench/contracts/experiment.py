@@ -100,6 +100,60 @@ class RetrievalConfig:
 
 
 @dataclass(frozen=True)
+class RerankerConfig:
+    """Framework-neutral reranker selection (Phase 2B).
+
+    A reranker is a separate system variable from retrieval: it reorders
+    or filters the candidate ranking produced by the retriever and never
+    introduces documents outside the candidate set. ``parameters`` holds
+    result-affecting reranker configuration (for example
+    ``candidate_top_k`` and, for the learned baseline, the pinned model
+    identity); execution-only knobs (device, batch size, cache location)
+    must not enter ``parameters``.
+    """
+
+    reranker_id: str
+    reranker_version: str
+    parameters: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "reranker_id",
+            require_non_empty_str(self.reranker_id, "reranker_id"),
+        )
+        object.__setattr__(
+            self,
+            "reranker_version",
+            require_non_empty_str(self.reranker_version, "reranker_version"),
+        )
+        object.__setattr__(
+            self, "parameters", dict(require_json_dict(self.parameters, "parameters"))
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "reranker_id": self.reranker_id,
+            "reranker_version": self.reranker_version,
+            "parameters": dict(self.parameters),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Any) -> "RerankerConfig":
+        data = expect_mapping(data, "RerankerConfig")
+        try:
+            return cls(
+                reranker_id=data["reranker_id"],
+                reranker_version=data["reranker_version"],
+                parameters=data.get("parameters", {}),
+            )
+        except KeyError as exc:
+            raise ContractValidationError(
+                f"RerankerConfig missing required field: {exc.args[0]}"
+            ) from exc
+
+
+@dataclass(frozen=True)
 class MemoryConfig:
     """Framework-neutral memory selection. Phase 0 stores config only."""
 
@@ -140,10 +194,14 @@ class ExperimentManifest:
 
     ``config_fingerprint()`` covers exactly the fields that can change run
     outputs: schema/benchmark versions, the ordered case list, system and
-    evaluator identities and versions, model/retrieval/memory configs, and
-    the random seed. ``experiment_id``, ``experiment_name`` and ``metadata``
-    are descriptive identity fields and are excluded by design; ``case_ids``
-    order is significant and preserved in the fingerprint.
+    evaluator identities and versions, model/retrieval/reranker/memory
+    configs, and the random seed. ``experiment_id``, ``experiment_name``
+    and ``metadata`` are descriptive identity fields and are excluded by
+    design; ``case_ids`` order is significant and preserved in the
+    fingerprint. A legacy manifest without ``reranker`` loads with
+    ``reranker=None`` and keeps its Phase 1 / Phase 2A fingerprint
+    bit-identical (the ``reranker`` key is omitted from the fingerprint
+    payload when ``None``).
     """
 
     schema_version: str
@@ -158,6 +216,7 @@ class ExperimentManifest:
 
     model: Optional[ModelConfig] = None
     retrieval: Optional[RetrievalConfig] = None
+    reranker: Optional[RerankerConfig] = None
     memory: Optional[MemoryConfig] = None
 
     evaluator_id: str = ""
@@ -206,6 +265,12 @@ class ExperimentManifest:
             object.__setattr__(
                 self, "retrieval", RetrievalConfig.from_dict(self.retrieval)
             )
+        if self.reranker is not None and not isinstance(
+            self.reranker, RerankerConfig
+        ):
+            object.__setattr__(
+                self, "reranker", RerankerConfig.from_dict(self.reranker)
+            )
         if self.memory is not None and not isinstance(self.memory, MemoryConfig):
             object.__setattr__(self, "memory", MemoryConfig.from_dict(self.memory))
         object.__setattr__(
@@ -226,7 +291,12 @@ class ExperimentManifest:
         )
 
     def _fingerprint_payload(self) -> Dict[str, Any]:
-        return {
+        # Backward compatibility (Phase 2B): legacy manifests carry
+        # ``reranker=None``. Omitting the key in that case keeps every
+        # Phase 1 / Phase 2A fingerprint bit-identical after the upgrade.
+        # A present reranker enters the payload and therefore the
+        # experiment identity.
+        payload: Dict[str, Any] = {
             "schema_version": self.schema_version,
             "benchmark_version": self.benchmark_version,
             "case_ids": list(self.case_ids),
@@ -241,6 +311,9 @@ class ExperimentManifest:
             "evaluator_version": self.evaluator_version,
             "random_seed": self.random_seed,
         }
+        if self.reranker is not None:
+            payload["reranker"] = self.reranker.to_dict()
+        return payload
 
     def config_fingerprint(self) -> str:
         """SHA-256 of the canonical JSON of output-affecting configuration."""
@@ -259,6 +332,9 @@ class ExperimentManifest:
             "model": self.model.to_dict() if self.model is not None else None,
             "retrieval": (
                 self.retrieval.to_dict() if self.retrieval is not None else None
+            ),
+            "reranker": (
+                self.reranker.to_dict() if self.reranker is not None else None
             ),
             "memory": self.memory.to_dict() if self.memory is not None else None,
             "evaluator_id": self.evaluator_id,
@@ -281,6 +357,7 @@ class ExperimentManifest:
                 system_version=data["system_version"],
                 model=data.get("model"),
                 retrieval=data.get("retrieval"),
+                reranker=data.get("reranker"),
                 memory=data.get("memory"),
                 evaluator_id=data["evaluator_id"],
                 evaluator_version=data["evaluator_version"],
@@ -310,5 +387,6 @@ __all__ = [
     "ExperimentManifest",
     "MemoryConfig",
     "ModelConfig",
+    "RerankerConfig",
     "RetrievalConfig",
 ]

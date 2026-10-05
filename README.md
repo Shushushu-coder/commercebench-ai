@@ -240,6 +240,46 @@ miss, never silently promoting a candidate to final.
 This change prepares the trace contract for reranking.
 No reranker is implemented in Phase 2A.
 
+## Phase 2B — Cross-Encoder Reranker Baseline
+
+Phase 2B adds the first learned reranker baseline on top of the Phase 2A
+candidate/final contract:
+
+- Candidate retriever: Hybrid BM25 + Dense RRF
+  (`hybrid-bm25-minilm-rrf-v0`)
+- Candidate depth: 10 (`reranker.parameters.candidate_top_k`)
+- Final depth: 3 (`retrieval.parameters.top_k`, the evaluation-visible
+  and generation-visible depth)
+- Reranker: `cross-encoder/ms-marco-MiniLM-L6-v2`
+- Pinned revision: `ce0834f22110de6d9222af7a7a03628121708969`
+  (immutable 40-hex; `main` and other moving references are rejected)
+- Max length: 512 (explicit, fingerprinted, and passed to the runtime)
+- Score activation: Identity / raw relevance score (higher is better;
+  no implicit sigmoid). Final `RetrievalEvent.scores` are cross-encoder
+  logits (`score_semantics = cross_encoder_logit`); candidate scores
+  remain RRF scores and the two scales are never compared.
+- Controlled control: `identity-reranker-v0` preserves the candidate
+  order and truncates to the final depth, so
+  `Hybrid -> Identity` vs `Hybrid -> CrossEncoder` isolates the reranker
+  treatment (same query, corpus, retrieval config, candidate/final depth,
+  system, generation fixture, evaluator, and seed).
+
+A reranked run emits two retrieval events in trace order: `candidate`
+(the Hybrid ranking with RRF scores, diagnostic only) and `final` (the
+reranked ranking with reranker scores). The candidate event is excluded
+from retrieval metrics; the final event is what generation consumes and
+what Recall@K, Precision@K, MRR, NDCG@K, and `RETRIEVAL_MISS` observe.
+Without a reranker the legacy single-event behavior is unchanged. The
+reranker can only reorder or filter the candidate set — out-of-candidate
+documents, duplicate candidate IDs, and non-finite scores are rejected.
+
+`cross-encoder/ms-marco-MiniLM-L6-v2` is an English MS MARCO ranking
+baseline. This phase does not establish Chinese/multilingual reranking
+quality. All files under `examples/rag_v0/` remain development fixtures,
+not a benchmark: observed development-case differences are reported, and
+no formal performance claim (`improves by X%`, `best reranker`,
+`production-ready`) is made.
+
 ## Development
 
 Requires Python 3.10+. Installing the package pulls the pinned
@@ -261,6 +301,7 @@ python -m pytest -m integration     # real pinned-model smoke
 commercebench/       core package
   contracts/         CaseSpec, ExperimentManifest, RunTrace, EvaluationResult
   rag/               Document, Corpus, retrievers, deterministic RAG pipeline
+  reranking/         RerankCandidate, RerankResult, Identity/CrossEncoder rerankers
   benchmark/         benchmark definitions, scenarios, tasks
   systems/           systems under test (pipelines, agents, configs)
   evaluation/        metrics, judges, scoring
