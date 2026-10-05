@@ -10,8 +10,10 @@ revision, ``max_length=512``, identity/raw-logit scoring).
 
 from .contracts import (
     RerankCandidate,
+    RerankDiagnostics,
     RerankResult,
     validate_candidate_ids_unique,
+    validate_diagnostics_against_candidates,
     validate_result_against_candidates,
 )
 from .rerankers import (
@@ -27,9 +29,11 @@ __all__ = [
     "IdentityReranker",
     "RERANKER_REGISTRY",
     "RerankCandidate",
+    "RerankDiagnostics",
     "RerankResult",
     "Reranker",
     "build_reranker",
     "validate_candidate_ids_unique",
+    "validate_diagnostics_against_candidates",
     "validate_result_against_candidates",
 ]

@@ -8,7 +8,10 @@ With a reranker the flow is ``retrieve candidate_top_k -> candidate
 event (role=candidate, retriever scores) -> rerank to final top_k ->
 final event (role=final, reranker scores) -> answer from the final
 top-1``. The candidate ranking is diagnostic; the final ranking is what
-generation consumes and what retrieval metrics evaluate.
+generation consumes and what retrieval metrics evaluate. The full
+candidate-level reranker ranking (Phase 2D) is persisted as diagnostic
+metadata under ``runtime_metadata["reranker"]["full_ranking"]`` — never
+as an extra retrieval event.
 
 The answer mapping is a Phase 1A deterministic fixture mechanism — a fixed
 ``document_id -> answer`` table owned by the pipeline configuration, not
@@ -175,7 +178,10 @@ class DeterministicRAGPipeline:
 
     def _run_with_reranker(self, user_input: str) -> RAGRunResult:
         # Deferred imports keep the Phase 1A import graph stdlib-only.
-        from commercebench.reranking.contracts import RerankCandidate
+        from commercebench.reranking.contracts import (
+            RerankCandidate,
+            validate_diagnostics_against_candidates,
+        )
 
         assert self._reranker is not None
         candidate_top_k: int = self._reranker.candidate_top_k
@@ -220,6 +226,27 @@ class DeterministicRAGPipeline:
                     f"reranked document {document_id!r} is not in the "
                     "candidate set"
                 )
+        # Fail closed on the Phase 2D diagnostic ranking as well: when
+        # the reranker returns full diagnostics they must cover every
+        # actual candidate exactly once, stay inside the candidate set,
+        # and agree with the final ranking as its prefix. The full
+        # ranking is diagnostic metadata only — it never becomes a
+        # third RetrievalEvent and never enters evaluation/generation.
+        diagnostics = getattr(reranked, "diagnostics", None)
+        if diagnostics is not None:
+            validate_diagnostics_against_candidates(
+                tuple(candidate_result.document_ids), diagnostics
+            )
+            depth = len(reranked.document_ids)
+            if tuple(diagnostics.document_ids[:depth]) != tuple(
+                reranked.document_ids
+            ) or tuple(diagnostics.scores[:depth]) != tuple(
+                reranked.scores
+            ):
+                raise ContractValidationError(
+                    "reranked final ranking must equal the full "
+                    "diagnostics prefix"
+                )
         candidate_event = RetrievalEvent(
             query=candidate_result.query,
             document_ids=candidate_result.document_ids,
@@ -246,6 +273,16 @@ class DeterministicRAGPipeline:
         # ``candidate_top_k`` recorded by the reranker must match the
         # depth actually requested from the retriever.
         reranker_metadata["candidate_top_k"] = candidate_top_k
+        if diagnostics is not None:
+            # Phase 2D diagnostic trace: the full candidate-level reranker
+            # ranking (IDs + scores only — never document text, tensors,
+            # or model paths) so rank movement and the final cutoff stay
+            # reconstructable offline. Plain-Python lists/floats keep the
+            # trace JSON-compatible.
+            reranker_metadata["full_ranking"] = {
+                "document_ids": list(diagnostics.document_ids),
+                "scores": [float(score) for score in diagnostics.scores],
+            }
         runtime_metadata["reranker"] = reranker_metadata
         return RAGRunResult(
             output_text=self._answer_for(reranked.document_ids),

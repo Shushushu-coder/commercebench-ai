@@ -280,6 +280,44 @@ not a benchmark: observed development-case differences are reported, and
 no formal performance claim (`improves by X%`, `best reranker`,
 `production-ready`) is made.
 
+## Phase 2D — Reranker Diagnostic Trace
+
+Phase 2D closes the one diagnostic gap left by Phase 2B/2C: the candidate
+event records the Hybrid candidate ranking and the final event records
+the reranked top-k, but the full candidate-level reranker ordering was
+not persisted. Now every reranked run preserves the complete reranker
+ranking in `runtime_metadata`:
+
+- `RerankResult.diagnostics` (`RerankDiagnostics`) carries the full
+  reranker ranking — every scored candidate's ID and score ordered by
+  score descending with `document_id` ascending tie-break, so position
+  `i + 1` is the reranker rank. It is returned by the same `rerank()`
+  call (no `last_*` mutable state); the final top-k is exactly its
+  prefix, enforced by validation.
+- `IdentityReranker` reports the full candidate ranking itself as its
+  diagnostics, so `Hybrid -> Identity` vs `Hybrid -> CrossEncoder`
+  share one diagnostic contract.
+- `CrossEncoderReranker` scores all candidates with a single `predict()`
+  pass; the full ranking, diagnostics, and final slice all derive from
+  those scores — no second inference, negative logits retained,
+  non-finite scores rejected even outside the final top-k.
+- The pipeline persists `result.diagnostics` as
+  `runtime_metadata["reranker"]["full_ranking"]` (`document_ids` +
+  `scores` only — no document text, tensors, or paths) after
+  fail-closed checks (full coverage of the candidate set, no unknown
+  documents, final-equals-prefix).
+
+Reranker diagnostic traces preserve full candidate-level reranker
+scores and ordering in `runtime_metadata`. The final `RetrievalEvent`
+remains limited to the evaluation-visible final top-k. This allows
+offline reconstruction of rank movement without changing retrieval
+metric semantics: candidate event + `reranker.full_ranking` + final
+event jointly answer which candidate moved where, which dropped
+candidate came closest to the final cutoff, and what every candidate's
+reranker score was — without re-running the model. Retrieval metrics,
+generation, experiment fingerprints, and the `RetrievalEvent`/`RunTrace`
+schemas are unchanged.
+
 ## Development
 
 Requires Python 3.10+. Installing the package pulls the pinned

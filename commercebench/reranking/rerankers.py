@@ -22,6 +22,7 @@ from commercebench.contracts.experiment import RerankerConfig
 
 from .contracts import (
     RerankCandidate,
+    RerankDiagnostics,
     RerankResult,
     validate_candidate_ids_unique,
     validate_result_against_candidates,
@@ -90,7 +91,10 @@ class IdentityReranker:
 
     Preserves the candidate order exactly and truncates to the final
     ``top_k``. Final scores are the candidate retrieval scores aligned to
-    the preserved order — no rescoring happens here.
+    the preserved order — no rescoring happens here. The full diagnostics
+    are the complete candidate ranking itself (all candidate IDs in
+    candidate order with all candidate retrieval scores); the final
+    ranking is its ``[:top_k]`` prefix.
     """
 
     reranker_id = "identity-reranker-v0"
@@ -115,6 +119,14 @@ class IdentityReranker:
                 f"final top_k {top_k} exceeds candidate_top_k "
                 f"{self.candidate_top_k}"
             )
+        diagnostics = RerankDiagnostics(
+            document_ids=tuple(
+                candidate.document_id for candidate in normalized
+            ),
+            scores=tuple(
+                float(candidate.retrieval_score) for candidate in normalized
+            ),
+        )
         selected = normalized[:top_k]
         document_ids = tuple(candidate.document_id for candidate in selected)
         scores = tuple(float(candidate.retrieval_score) for candidate in selected)
@@ -125,7 +137,10 @@ class IdentityReranker:
             top_k,
         )
         return RerankResult(
-            query=query, document_ids=document_ids, scores=scores
+            query=query,
+            document_ids=document_ids,
+            scores=scores,
+            diagnostics=diagnostics,
         )
 
     def runtime_metadata(self) -> Dict[str, Any]:

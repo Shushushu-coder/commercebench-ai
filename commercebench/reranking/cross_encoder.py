@@ -36,6 +36,7 @@ from commercebench.contracts.errors import ContractValidationError
 
 from .contracts import (
     RerankCandidate,
+    RerankDiagnostics,
     RerankResult,
     validate_candidate_ids_unique,
     validate_result_against_candidates,
@@ -260,8 +261,16 @@ class CrossEncoderReranker:
                 f"{self.candidate_top_k}"
             )
         if not normalized:
-            return RerankResult(query=query, document_ids=(), scores=())
+            return RerankResult(
+                query=query,
+                document_ids=(),
+                scores=(),
+                diagnostics=RerankDiagnostics(document_ids=(), scores=()),
+            )
         validate_candidate_ids_unique(normalized)
+        # One scoring pass over all candidates: the full scores below feed
+        # both the complete diagnostic ranking and the final top-k slice,
+        # so diagnostics never trigger a second model inference.
         scores = self._score_candidates(query, normalized)
         for index, score in enumerate(scores):
             if not math.isfinite(float(score)):
@@ -275,6 +284,10 @@ class CrossEncoderReranker:
             ),
             key=lambda item: (-item[1], item[0]),
         )
+        diagnostics = RerankDiagnostics(
+            document_ids=tuple(document_id for document_id, _ in ordered),
+            scores=tuple(float(score) for _, score in ordered),
+        )
         selected = ordered[:top_k]
         document_ids = tuple(document_id for document_id, _ in selected)
         final_scores = tuple(float(score) for _, score in selected)
@@ -285,7 +298,10 @@ class CrossEncoderReranker:
             top_k,
         )
         return RerankResult(
-            query=query, document_ids=document_ids, scores=final_scores
+            query=query,
+            document_ids=document_ids,
+            scores=final_scores,
+            diagnostics=diagnostics,
         )
 
     def runtime_metadata(self) -> Dict[str, Any]:
