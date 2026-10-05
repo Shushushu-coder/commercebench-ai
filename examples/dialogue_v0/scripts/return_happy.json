@@ -1,0 +1,37 @@
+{
+  "t1": [
+    {
+      "output_text": "请问您想退哪个订单？请提供订单号。",
+      "assistant_tags": ["clarify"],
+      "tool_calls": []
+    }
+  ],
+  "t2": [
+    {
+      "output_text": "",
+      "assistant_tags": [],
+      "tool_calls": [
+        {"tool_name": "lookup_order", "arguments": {"order_id": "A1001"}}
+      ]
+    },
+    {
+      "output_text": "订单A1001已发货10天，符合退货条件。是否确认退货？",
+      "assistant_tags": [],
+      "tool_calls": []
+    }
+  ],
+  "t3": [
+    {
+      "output_text": "",
+      "assistant_tags": [],
+      "tool_calls": [
+        {"tool_name": "request_return", "arguments": {"order_id": "A1001"}}
+      ]
+    },
+    {
+      "output_text": "已为订单A1001提交退货申请。",
+      "assistant_tags": [],
+      "tool_calls": []
+    }
+  ]
+}

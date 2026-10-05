@@ -1,0 +1,59 @@
+{
+  "schema_version": "0.1",
+  "case_id": "dialogue-return-001",
+  "benchmark_version": "commercebench-dev-0.1",
+  "task_family": "commerce_dialogue",
+  "intent": "return",
+  "difficulty": "medium",
+  "answerability": "answerable",
+  "turns": [
+    {
+      "turn_id": "t1",
+      "user_input": "我想退掉我最近的订单",
+      "activation": null,
+      "required_facts": [],
+      "forbidden_claims": [],
+      "expected_tool_calls": [],
+      "expected_state_delta": {}
+    },
+    {
+      "turn_id": "t2",
+      "user_input": "是订单A1001",
+      "activation": {"on_assistant_tag": "clarify"},
+      "required_facts": [],
+      "forbidden_claims": [],
+      "expected_tool_calls": [
+        {"tool_name": "lookup_order", "arguments": {"order_id": "A1001"}}
+      ],
+      "expected_state_delta": {}
+    },
+    {
+      "turn_id": "t3",
+      "user_input": "确认退货",
+      "activation": {"on_tool": "lookup_order"},
+      "required_facts": [],
+      "forbidden_claims": [],
+      "expected_tool_calls": [
+        {"tool_name": "request_return", "arguments": {"order_id": "A1001"}}
+      ],
+      "expected_state_delta": {"returns": {"A1001": {"status": "requested"}}}
+    }
+  ],
+  "initial_state": {
+    "orders": {
+      "A1001": {
+        "status": "delivered",
+        "delivered_days_ago": 10,
+        "returnable": true
+      }
+    },
+    "returns": {}
+  },
+  "expected_final_state": {"returns": {"A1001": {"status": "requested"}}},
+  "required_facts": ["A1001"],
+  "forbidden_claims": ["退款已到账"],
+  "metadata": {
+    "fixture": "development only",
+    "scenario": "A — return eligibility + request (clarify → lookup → act)"
+  }
+}

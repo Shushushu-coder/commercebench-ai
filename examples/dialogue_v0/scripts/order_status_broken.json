@@ -1,0 +1,37 @@
+{
+  "t1": [
+    {
+      "output_text": "请问是哪个订单？",
+      "assistant_tags": ["clarify"],
+      "tool_calls": []
+    }
+  ],
+  "t2": [
+    {
+      "output_text": "",
+      "assistant_tags": [],
+      "tool_calls": [
+        {"tool_name": "lookup_order", "arguments": {"order_id": "B2001"}}
+      ]
+    },
+    {
+      "output_text": "订单B2001已发货。",
+      "assistant_tags": [],
+      "tool_calls": []
+    }
+  ],
+  "t3": [
+    {
+      "output_text": "",
+      "assistant_tags": [],
+      "tool_calls": [
+        {"tool_name": "request_return", "arguments": {"order_id": "B2001"}}
+      ]
+    },
+    {
+      "output_text": "退货处理完成。",
+      "assistant_tags": [],
+      "tool_calls": []
+    }
+  ]
+}

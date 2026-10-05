@@ -1,0 +1,44 @@
+{
+  "t1": [
+    {
+      "output_text": "请问是哪个订单？请提供订单号。",
+      "assistant_tags": ["clarify"],
+      "tool_calls": []
+    }
+  ],
+  "t2": [
+    {
+      "output_text": "",
+      "assistant_tags": [],
+      "tool_calls": [
+        {"tool_name": "lookup_order", "arguments": {"order_id": "B2001"}}
+      ]
+    },
+    {
+      "output_text": "订单B2001已发货，不符合退货条件，无法申请退货。",
+      "assistant_tags": [],
+      "tool_calls": []
+    }
+  ],
+  "t3": [
+    {
+      "output_text": "",
+      "assistant_tags": [],
+      "tool_calls": [
+        {"tool_name": "lookup_order", "arguments": {"order_id": "B2002"}}
+      ]
+    },
+    {
+      "output_text": "",
+      "assistant_tags": [],
+      "tool_calls": [
+        {"tool_name": "request_return", "arguments": {"order_id": "B2002"}}
+      ]
+    },
+    {
+      "output_text": "订单B2002已签收且可退，已提交退货申请；B2001不符合条件。",
+      "assistant_tags": [],
+      "tool_calls": []
+    }
+  ]
+}

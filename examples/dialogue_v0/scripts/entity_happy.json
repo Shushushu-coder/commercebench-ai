@@ -1,0 +1,30 @@
+{
+  "t1": [
+    {
+      "output_text": "",
+      "assistant_tags": [],
+      "tool_calls": [
+        {"tool_name": "lookup_order", "arguments": {"order_id": "C3001"}}
+      ]
+    },
+    {
+      "output_text": "订单C3001已签收3天，符合退货条件。确认退货吗？",
+      "assistant_tags": [],
+      "tool_calls": []
+    }
+  ],
+  "t2": [
+    {
+      "output_text": "",
+      "assistant_tags": [],
+      "tool_calls": [
+        {"tool_name": "request_return", "arguments": {"order_id": "C3001"}}
+      ]
+    },
+    {
+      "output_text": "已为订单C3001提交退货申请。",
+      "assistant_tags": [],
+      "tool_calls": []
+    }
+  ]
+}

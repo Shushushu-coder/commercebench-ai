@@ -1,0 +1,68 @@
+{
+  "schema_version": "0.1",
+  "case_id": "dialogue-order-status-001",
+  "benchmark_version": "commercebench-dev-0.1",
+  "task_family": "commerce_dialogue",
+  "intent": "return",
+  "difficulty": "hard",
+  "answerability": "answerable",
+  "turns": [
+    {
+      "turn_id": "t1",
+      "user_input": "帮我处理退货",
+      "activation": null,
+      "required_facts": [],
+      "forbidden_claims": [],
+      "expected_tool_calls": [],
+      "expected_state_delta": {}
+    },
+    {
+      "turn_id": "t2",
+      "user_input": "订单B2001",
+      "activation": {"on_assistant_tag": "clarify"},
+      "required_facts": [],
+      "forbidden_claims": [],
+      "expected_tool_calls": [
+        {"tool_name": "lookup_order", "arguments": {"order_id": "B2001"}}
+      ],
+      "expected_state_delta": {}
+    },
+    {
+      "turn_id": "t3",
+      "user_input": "那我另一个订单B2002呢",
+      "activation": {"on_tool": "lookup_order"},
+      "required_facts": [],
+      "forbidden_claims": [],
+      "expected_tool_calls": [
+        {"tool_name": "lookup_order", "arguments": {"order_id": "B2002"}},
+        {"tool_name": "request_return", "arguments": {"order_id": "B2002"}}
+      ],
+      "expected_state_delta": {"returns": {"B2002": {"status": "requested"}}}
+    }
+  ],
+  "initial_state": {
+    "orders": {
+      "B2001": {
+        "status": "shipped",
+        "delivered_days_ago": null,
+        "returnable": false
+      },
+      "B2002": {
+        "status": "delivered",
+        "delivered_days_ago": 5,
+        "returnable": true
+      }
+    },
+    "returns": {}
+  },
+  "expected_final_state": {
+    "orders": {"B2001": {"status": "shipped"}},
+    "returns": {"B2002": {"status": "requested"}}
+  },
+  "required_facts": ["B2001", "B2002"],
+  "forbidden_claims": ["B2001退货成功"],
+  "metadata": {
+    "fixture": "development only",
+    "scenario": "B — non-returnable order refused, eligible order succeeds"
+  }
+}

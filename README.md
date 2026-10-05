@@ -408,6 +408,63 @@ diagnostic observations, not formal failures.
   roundtrip stability; `cutoff_margin` is reused numeric evidence from
   Phase 2E and never thresholded into a failure.
 
+## Phase 3B — Deterministic Stateful Dialogue Vertical Slice
+
+The first multi-turn benchmark slice: a deterministic, stateful,
+tool-aware dialogue loop that is fully offline-evaluable. It validates
+dialogue *benchmark mechanics* — turn release, canonical state,
+tool execution, per-turn evidence, deterministic metrics — not model
+dialogue quality.
+
+- `DialogueCaseSpec` and `DialogueRunTrace` are separate contracts
+  from the single-turn `CaseSpec`/`RunTrace`: a dialogue case carries
+  ordered `DialogueTurnSpec`s plus JSON `initial_state` and
+  `expected_final_state` (subset-matched). There is intentionally no
+  `user_input`/`expected_response` on a dialogue case.
+- `DialogueHarness` owns the canonical business state and the
+  explicit, application-managed visible history. The system under
+  test (`DialogueSystemUnderTest.respond`) only *proposes* tool
+  calls; the deterministic `CommerceToolSimulator`
+  (`lookup_order`, `request_return`) is the only authority that can
+  change state. Failed calls leave state bit-identical.
+- Conditional user turns are released by structured signals only:
+  `{"on_tool": ...}` (fires on a *successful* call) or
+  `{"on_assistant_tag": ...}` (fires on an emitted tag such as
+  `clarify`); `null`/`{}` is the default trigger. Each turn fires at
+  most once and unconsumed turns never leak into the system's input.
+- `DialogueTurnTrace` records `state_before`/`state_after` snapshots,
+  `activation_evidence`, and per-step `DialogueStepTrace` entries so
+  inner-loop tool-call steps are preserved. `DialogueRunTrace`
+  records `final_state`, an explicit `termination_reason`
+  (`completed` / `user_done` / `max_turns` / `tool_limit` /
+  `invalid_tool` / `system_error`), and per-step `history_digest`
+  (SHA-256 over the exact input context the system saw).
+- `ExperimentManifest.dialogue` (`DialogueHarnessConfig`) is the
+  fingerprinted harness identity: `max_turns`,
+  `max_tool_calls_per_turn`, `history_policy`, `tool_policy`,
+  `tool_simulator{id,version}` are all required and unknown keys are
+  rejected. Omit-when-`null` keeps every Phase 0–2G fingerprint
+  bit-identical. `ToolEvent` gained additive `status`/`error` fields;
+  legacy three-key JSON loads unchanged.
+- `DialogueEvaluator` emits the existing `EvaluationResult` with
+  `final_state_match`, `state_delta_coverage`,
+  `required_tool_coverage`, `invalid_tool_call_count`,
+  `forbidden_claim_violation`, `required_fact_coverage` (when
+  declared), and `turn_count` — no overall score. Failure outcomes:
+  `TASK_INCOMPLETE`, `INVALID_TOOL_CALL`,
+  `REQUIRED_TOOL_MISSING` plus the reused generation categories.
+- Fixtures: `examples/dialogue_v0/` holds three commerce scenarios
+  (return happy path; non-returnable order vs eligible sibling;
+  wrong-entity targeting) with happy and broken system scripts.
+  `ScriptedDialogueSystem` keys steps by `(turn_id, invocation)` and
+  embeds the script hash in `system_version`.
+
+Phase 3B uses no real LLM, no retrieval-per-turn, no reranker, and no
+long-term memory. `retrieval_events`/`memory_events` slots exist in
+the I/O and trace contracts but must stay empty. Prompt identity
+(prompt template/version fingerprinted via `model.parameters`) is a
+BLOCKER before Phase 3C adds a real LLM dialogue baseline.
+
 ## Development
 
 Requires Python 3.10+. Installing the package pulls the pinned
@@ -423,6 +480,7 @@ python -m pytest                    # fast offline suite
 python -m pytest -m integration     # real pinned-model smoke
 ```
 
+
 ## Project layout
 
 ```text
@@ -433,11 +491,12 @@ commercebench/       core package
   benchmark/         benchmark definitions, scenarios, tasks
   systems/           systems under test (pipelines, agents, configs)
   evaluation/        metrics, judges, scoring
-  runner/            experiment runner (case -> system -> trace)
   reporting/         experiment reporting and regression analysis
+  dialogue/          deterministic stateful dialogue harness and tools
 tests/               test suite
 configs/             benchmark and experiment configurations
 experiments/         experiment manifests
 examples/phase0/     Phase 0 development fixtures (not a benchmark)
 examples/rag_v0/     Phase 1A RAG development fixtures (not a benchmark)
+examples/dialogue_v0/ Phase 3B dialogue fixtures (not a benchmark)
 ```

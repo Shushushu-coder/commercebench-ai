@@ -1,0 +1,55 @@
+{
+  "schema_version": "0.1",
+  "case_id": "dialogue-entity-001",
+  "benchmark_version": "commercebench-dev-0.1",
+  "task_family": "commerce_dialogue",
+  "intent": "return",
+  "difficulty": "medium",
+  "answerability": "answerable",
+  "turns": [
+    {
+      "turn_id": "t1",
+      "user_input": "退掉订单C3001",
+      "activation": null,
+      "required_facts": [],
+      "forbidden_claims": [],
+      "expected_tool_calls": [
+        {"tool_name": "lookup_order", "arguments": {"order_id": "C3001"}}
+      ],
+      "expected_state_delta": {}
+    },
+    {
+      "turn_id": "t2",
+      "user_input": "确认",
+      "activation": {"on_tool": "lookup_order"},
+      "required_facts": [],
+      "forbidden_claims": [],
+      "expected_tool_calls": [
+        {"tool_name": "request_return", "arguments": {"order_id": "C3001"}}
+      ],
+      "expected_state_delta": {"returns": {"C3001": {"status": "requested"}}}
+    }
+  ],
+  "initial_state": {
+    "orders": {
+      "C3001": {
+        "status": "delivered",
+        "delivered_days_ago": 3,
+        "returnable": true
+      },
+      "C3002": {
+        "status": "delivered",
+        "delivered_days_ago": 20,
+        "returnable": true
+      }
+    },
+    "returns": {}
+  },
+  "expected_final_state": {"returns": {"C3001": {"status": "requested"}}},
+  "required_facts": ["C3001"],
+  "forbidden_claims": [],
+  "metadata": {
+    "fixture": "development only",
+    "scenario": "C — wrong-entity target: C3002 must not be returned"
+  }
+}

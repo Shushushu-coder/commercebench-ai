@@ -188,6 +188,119 @@ class MemoryConfig:
             ) from exc
 
 
+_ALLOWED_DIALOGUE_PARAMETERS: Tuple[str, ...] = (
+    "max_turns",
+    "max_tool_calls_per_turn",
+    "history_policy",
+    "tool_policy",
+    "tool_simulator",
+)
+
+_ALLOWED_HISTORY_POLICIES: Tuple[str, ...] = ("full",)
+
+
+@dataclass(frozen=True)
+class DialogueHarnessConfig:
+    """Framework-neutral dialogue/tool harness selection (Phase 3B).
+
+    The harness — not the model — owns turn iteration, history
+    construction, the canonical business state, and tool execution.
+    All result-affecting orchestration lives in ``parameters`` and is
+    validated fail-closed so hidden defaults cannot drift: unknown keys
+    are rejected. Execution-only knobs (timeouts, logging) MUST NOT
+    enter ``parameters``.
+    """
+
+    harness_id: str
+    harness_version: str
+    parameters: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "harness_id",
+            require_non_empty_str(self.harness_id, "harness_id"),
+        )
+        object.__setattr__(
+            self,
+            "harness_version",
+            require_non_empty_str(self.harness_version, "harness_version"),
+        )
+        object.__setattr__(
+            self,
+            "parameters",
+            dict(require_json_dict(self.parameters, "parameters")),
+        )
+        unknown = set(self.parameters) - set(_ALLOWED_DIALOGUE_PARAMETERS)
+        if unknown:
+            raise ContractValidationError(
+                f"unknown dialogue harness parameters: {sorted(unknown)}"
+            )
+        missing = set(_ALLOWED_DIALOGUE_PARAMETERS) - set(self.parameters)
+        if missing:
+            raise ContractValidationError(
+                "dialogue harness parameters missing required keys: "
+                f"{sorted(missing)} — all result-affecting knobs must be "
+                "explicit (no hidden defaults)"
+            )
+        if "max_turns" in self.parameters:
+            require_int(
+                self.parameters["max_turns"], "parameters.max_turns"
+            )
+            if self.parameters["max_turns"] <= 0:
+                raise ContractValidationError(
+                    "parameters.max_turns must be a positive integer"
+                )
+        if "max_tool_calls_per_turn" in self.parameters:
+            value = self.parameters["max_tool_calls_per_turn"]
+            require_int(value, "parameters.max_tool_calls_per_turn")
+            if value <= 0:
+                raise ContractValidationError(
+                    "parameters.max_tool_calls_per_turn must be positive"
+                )
+        if "history_policy" in self.parameters and (
+            self.parameters["history_policy"] not in _ALLOWED_HISTORY_POLICIES
+        ):
+            raise ContractValidationError(
+                "parameters.history_policy must be one of "
+                f"{list(_ALLOWED_HISTORY_POLICIES)}"
+            )
+        if "tool_policy" in self.parameters:
+            require_non_empty_str(
+                self.parameters["tool_policy"], "parameters.tool_policy"
+            )
+        if "tool_simulator" in self.parameters:
+            simulator = require_json_dict(
+                self.parameters["tool_simulator"], "parameters.tool_simulator"
+            )
+            require_non_empty_str(
+                simulator.get("id"), "parameters.tool_simulator.id"
+            )
+            require_non_empty_str(
+                simulator.get("version"), "parameters.tool_simulator.version"
+            )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "harness_id": self.harness_id,
+            "harness_version": self.harness_version,
+            "parameters": dict(self.parameters),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Any) -> "DialogueHarnessConfig":
+        data = expect_mapping(data, "DialogueHarnessConfig")
+        try:
+            return cls(
+                harness_id=data["harness_id"],
+                harness_version=data["harness_version"],
+                parameters=data.get("parameters", {}),
+            )
+        except KeyError as exc:
+            raise ContractValidationError(
+                f"DialogueHarnessConfig missing required field: {exc.args[0]}"
+            ) from exc
+
 @dataclass(frozen=True)
 class ExperimentManifest:
     """Describes one experiment: which cases, which system, which evaluator.
@@ -201,7 +314,9 @@ class ExperimentManifest:
     fingerprint. A legacy manifest without ``reranker`` loads with
     ``reranker=None`` and keeps its Phase 1 / Phase 2A fingerprint
     bit-identical (the ``reranker`` key is omitted from the fingerprint
-    payload when ``None``).
+    payload when ``None``). Phase 3B applies the same rule to
+    ``dialogue``: absent or null stays out of the fingerprint payload,
+    so every Phase 0–2G fingerprint is preserved bit-identically.
     """
 
     schema_version: str
@@ -218,6 +333,7 @@ class ExperimentManifest:
     retrieval: Optional[RetrievalConfig] = None
     reranker: Optional[RerankerConfig] = None
     memory: Optional[MemoryConfig] = None
+    dialogue: Optional[DialogueHarnessConfig] = None
 
     evaluator_id: str = ""
     evaluator_version: str = ""
@@ -273,6 +389,12 @@ class ExperimentManifest:
             )
         if self.memory is not None and not isinstance(self.memory, MemoryConfig):
             object.__setattr__(self, "memory", MemoryConfig.from_dict(self.memory))
+        if self.dialogue is not None and not isinstance(
+            self.dialogue, DialogueHarnessConfig
+        ):
+            object.__setattr__(
+                self, "dialogue", DialogueHarnessConfig.from_dict(self.dialogue)
+            )
         object.__setattr__(
             self,
             "evaluator_id",
@@ -313,6 +435,11 @@ class ExperimentManifest:
         }
         if self.reranker is not None:
             payload["reranker"] = self.reranker.to_dict()
+        # Phase 3B: omit-when-None keeps all Phase 0–2G fingerprints
+        # bit-identical; a present dialogue harness is result-affecting
+        # and enters the experiment identity.
+        if self.dialogue is not None:
+            payload["dialogue"] = self.dialogue.to_dict()
         return payload
 
     def config_fingerprint(self) -> str:
@@ -337,6 +464,9 @@ class ExperimentManifest:
                 self.reranker.to_dict() if self.reranker is not None else None
             ),
             "memory": self.memory.to_dict() if self.memory is not None else None,
+            "dialogue": (
+                self.dialogue.to_dict() if self.dialogue is not None else None
+            ),
             "evaluator_id": self.evaluator_id,
             "evaluator_version": self.evaluator_version,
             "random_seed": self.random_seed,
@@ -359,6 +489,7 @@ class ExperimentManifest:
                 retrieval=data.get("retrieval"),
                 reranker=data.get("reranker"),
                 memory=data.get("memory"),
+                dialogue=data.get("dialogue"),
                 evaluator_id=data["evaluator_id"],
                 evaluator_version=data["evaluator_version"],
                 random_seed=data.get("random_seed", 0),
@@ -384,6 +515,7 @@ class ExperimentManifest:
 
 
 __all__ = [
+    "DialogueHarnessConfig",
     "ExperimentManifest",
     "MemoryConfig",
     "ModelConfig",

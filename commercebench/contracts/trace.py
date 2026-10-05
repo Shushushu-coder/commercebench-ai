@@ -106,11 +106,21 @@ class RetrievalEvent:
 
 @dataclass(frozen=True)
 class ToolEvent:
-    """One tool invocation. Phase 0 defines the shape only; no tools exist."""
+    """One tool invocation.
+
+    Phase 0 defines the shape only. Phase 3B adds the additive optional
+    ``status``/``error`` pair: ``None`` means a legacy event with no
+    recorded outcome; new harness-executed events must carry
+    ``status="ok"`` (with ``error=None``) or ``status="error"`` (with a
+    non-empty ``error`` code/message). Serializing a legacy event omits
+    both keys so old JSON round-trips byte-identically.
+    """
 
     tool_name: str
     arguments: Dict[str, Any] = field(default_factory=dict)
     result: Any = None
+    status: Optional[str] = None
+    error: Optional[str] = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -120,13 +130,36 @@ class ToolEvent:
             self, "arguments", dict(require_json_dict(self.arguments, "arguments"))
         )
         ensure_json_compatible(self.result, "result")
+        if self.status is not None and self.status not in ("ok", "error"):
+            raise ContractValidationError(
+                f"status must be 'ok', 'error', or null, got {self.status!r}"
+            )
+        if self.status == "ok" and self.error is not None:
+            raise ContractValidationError(
+                "error must be null when status is 'ok'"
+            )
+        if self.status == "error":
+            object.__setattr__(
+                self, "error", require_non_empty_str(self.error, "error")
+            )
+        elif self.error is not None:
+            raise ContractValidationError(
+                "error requires status='error' (legacy events carry neither)"
+            )
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        payload: Dict[str, Any] = {
             "tool_name": self.tool_name,
             "arguments": dict(self.arguments),
             "result": self.result,
         }
+        # Legacy compatibility: events without an execution outcome keep
+        # the original three-key shape.
+        if self.status is not None:
+            payload["status"] = self.status
+        if self.error is not None:
+            payload["error"] = self.error
+        return payload
 
     @classmethod
     def from_dict(cls, data: Any) -> "ToolEvent":
@@ -136,6 +169,8 @@ class ToolEvent:
                 tool_name=data["tool_name"],
                 arguments=data.get("arguments", {}),
                 result=data.get("result"),
+                status=data.get("status"),
+                error=data.get("error"),
             )
         except KeyError as exc:
             raise ContractValidationError(
