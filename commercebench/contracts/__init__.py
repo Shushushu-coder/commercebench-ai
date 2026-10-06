@@ -30,7 +30,12 @@ from .dialogue import (
 from .errors import ContractValidationError
 from .evaluation import EvaluationResult, MetricResult
 from .experiment import (
+    ALLOWED_HISTORY_RENDERERS,
+    ALLOWED_STATE_RENDERERS,
+    ALLOWED_TOOL_POLICIES,
+    ALLOWED_TOOL_SCHEMA_IDS,
     DialogueHarnessConfig,
+    DialogueModelIdentity,
     ExperimentManifest,
     MemoryConfig,
     ModelConfig,
@@ -48,6 +53,10 @@ from .trace import (
 
 __all__ = [
     "SCHEMA_VERSION",
+    "ALLOWED_HISTORY_RENDERERS",
+    "ALLOWED_STATE_RENDERERS",
+    "ALLOWED_TOOL_POLICIES",
+    "ALLOWED_TOOL_SCHEMA_IDS",
     "Answerability",
     "CaseSpec",
     "ContractValidationError",
@@ -55,6 +64,7 @@ __all__ = [
     "DialogueCaseSpec",
     "DialogueHarnessConfig",
     "DialogueHistoryEntry",
+    "DialogueModelIdentity",
     "DialogueRunTrace",
     "DialogueStepTrace",
     "DialogueToolDescriptor",

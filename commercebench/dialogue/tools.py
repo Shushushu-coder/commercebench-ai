@@ -19,9 +19,12 @@ contract-pinned):
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
+from commercebench.contracts.common import canonical_json
+from commercebench.contracts.dialogue import DialogueToolDescriptor
 from commercebench.contracts.errors import ContractValidationError
 
 from .state import json_state_copy
@@ -32,10 +35,50 @@ SIMULATOR_VERSION = "0.1"
 TOOL_LOOKUP_ORDER = "lookup_order"
 TOOL_REQUEST_RETURN = "request_return"
 
+#: Tools that mutate canonical state; every other offered tool is
+#: read-only. Consumed by the ``lookup-before-mutate-v0`` tool policy.
+STATE_CHANGING_TOOLS: Tuple[str, ...] = (TOOL_REQUEST_RETURN,)
+
 ERROR_UNKNOWN_TOOL = "UNKNOWN_TOOL"
 ERROR_ORDER_NOT_FOUND = "ORDER_NOT_FOUND"
 ERROR_PRECONDITION_FAILED = "PRECONDITION_FAILED"
 ERROR_BAD_ARGUMENTS = "BAD_ARGUMENTS"
+
+#: Identity of the schema the harness exposes to the system via
+#: ``DialogueTurnInput.available_tools``. The schema is the exact
+#: runtime argument contract — same names, same required fields.
+TOOL_SCHEMA_ID = "commerce-tools-schema-v0"
+TOOL_SCHEMA_VERSION = "0.1"
+
+TOOL_DESCRIPTORS: Tuple[DialogueToolDescriptor, ...] = (
+    DialogueToolDescriptor(
+        name=TOOL_LOOKUP_ORDER,
+        description="Return the stored order record for an order id.",
+        argument_schema={"order_id": "string"},
+    ),
+    DialogueToolDescriptor(
+        name=TOOL_REQUEST_RETURN,
+        description=(
+            "Request a return for a delivered, returnable order that "
+            "has no existing return."
+        ),
+        argument_schema={"order_id": "string"},
+    ),
+)
+
+
+def tool_schema_hash() -> str:
+    """SHA-256 of the canonical descriptor set (names, descriptions,
+    argument schemas). Any change to what the system is offered — or
+    to the wording it reads — changes the identity."""
+    payload = {
+        "tool_schema_id": TOOL_SCHEMA_ID,
+        "tool_schema_version": TOOL_SCHEMA_VERSION,
+        "tools": [descriptor.to_dict() for descriptor in TOOL_DESCRIPTORS],
+    }
+    return hashlib.sha256(
+        canonical_json(payload).encode("utf-8")
+    ).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -183,7 +226,12 @@ __all__ = [
     "ERROR_UNKNOWN_TOOL",
     "SIMULATOR_ID",
     "SIMULATOR_VERSION",
+    "STATE_CHANGING_TOOLS",
+    "TOOL_DESCRIPTORS",
     "TOOL_LOOKUP_ORDER",
     "TOOL_REQUEST_RETURN",
+    "TOOL_SCHEMA_ID",
+    "TOOL_SCHEMA_VERSION",
     "ToolExecutionResult",
+    "tool_schema_hash",
 ]

@@ -187,6 +187,34 @@ class MemoryConfig:
                 f"MemoryConfig missing required field: {exc.args[0]}"
             ) from exc
 
+# ---------------------------------------------------------------------------
+# Dialogue harness config (Phase 3B) + real-LLM dialogue identity (Phase 3D)
+# ---------------------------------------------------------------------------
+
+ALLOWED_HISTORY_POLICIES: Tuple[str, ...] = ("full",)
+
+#: Registered tool-call policies (Phase 3D). ``tool_policy`` enters the
+#: fingerprint, so every label here must correspond to distinct,
+#: implemented runtime behavior — arbitrary strings are rejected.
+#: ``direct-tools-v0`` applies no gating; ``lookup-before-mutate-v0``
+#: requires a successful ``lookup_order(order_id)`` earlier in the
+#: same dialogue before any state-changing call for that order.
+ALLOWED_TOOL_POLICIES: Tuple[str, ...] = (
+    "direct-tools-v0",
+    "lookup-before-mutate-v0",
+)
+
+#: Provider-neutral renderers a real-LLM dialogue adapter may declare
+#: (Phase 3D). ``full-history-messages-v0`` renders the complete
+#: visible history as ordered role/content messages;
+#: ``state-json-v0`` renders the canonical state view as a JSON block.
+ALLOWED_HISTORY_RENDERERS: Tuple[str, ...] = ("full-history-messages-v0",)
+ALLOWED_STATE_RENDERERS: Tuple[str, ...] = ("state-json-v0",)
+
+#: Schema identities for the tool surface offered to the system
+#: (Phase 3D). ``commerce-tools-schema-v0`` covers the V0 simulator
+#: contract (``lookup_order`` / ``request_return``).
+ALLOWED_TOOL_SCHEMA_IDS: Tuple[str, ...] = ("commerce-tools-schema-v0",)
 
 _ALLOWED_DIALOGUE_PARAMETERS: Tuple[str, ...] = (
     "max_turns",
@@ -195,8 +223,6 @@ _ALLOWED_DIALOGUE_PARAMETERS: Tuple[str, ...] = (
     "tool_policy",
     "tool_simulator",
 )
-
-_ALLOWED_HISTORY_POLICIES: Tuple[str, ...] = ("full",)
 
 
 @dataclass(frozen=True)
@@ -259,15 +285,19 @@ class DialogueHarnessConfig:
                     "parameters.max_tool_calls_per_turn must be positive"
                 )
         if "history_policy" in self.parameters and (
-            self.parameters["history_policy"] not in _ALLOWED_HISTORY_POLICIES
+            self.parameters["history_policy"] not in ALLOWED_HISTORY_POLICIES
         ):
             raise ContractValidationError(
                 "parameters.history_policy must be one of "
-                f"{list(_ALLOWED_HISTORY_POLICIES)}"
+                f"{list(ALLOWED_HISTORY_POLICIES)}"
             )
-        if "tool_policy" in self.parameters:
-            require_non_empty_str(
-                self.parameters["tool_policy"], "parameters.tool_policy"
+        if "tool_policy" in self.parameters and (
+            self.parameters["tool_policy"] not in ALLOWED_TOOL_POLICIES
+        ):
+            raise ContractValidationError(
+                "parameters.tool_policy must be a registered tool policy, "
+                f"one of {list(ALLOWED_TOOL_POLICIES)}, got "
+                f"{self.parameters['tool_policy']!r}"
             )
         if "tool_simulator" in self.parameters:
             simulator = require_json_dict(
@@ -301,6 +331,161 @@ class DialogueHarnessConfig:
                 f"DialogueHarnessConfig missing required field: {exc.args[0]}"
             ) from exc
 
+
+@dataclass(frozen=True)
+class DialogueModelIdentity:
+    """Provider-neutral identity of a real-LLM dialogue system (Phase 3D).
+
+    Everything a provider actually sees or resolves is declared here —
+    before the first real model call — so a manifest fully answers
+    "what produced this trace": provider/model/revision, the prompt
+    template (id + version + SHA-256 of its canonical text), the
+    history/state renderers, the exposed tool schema (id + version +
+    hash), and the generation parameters actually sent. Phase 3D only
+    defines and validates the contract; adapters fail closed when a
+    declared identity mismatches the runtime binding.
+
+    ``model_revision`` is the provider-immutable model version when
+    available; it is omitted from serialization when ``None`` so
+    providers exposing only mutable aliases stay representable.
+    """
+
+    provider: str
+    model: str
+    model_revision: Optional[str] = None
+
+    prompt_id: str = ""
+    prompt_version: str = ""
+    prompt_hash: str = ""
+
+    history_renderer_id: str = ""
+    history_renderer_version: str = ""
+
+    state_renderer_id: str = ""
+    state_renderer_version: str = ""
+
+    tool_schema_id: str = ""
+    tool_schema_version: str = ""
+    tool_schema_hash: str = ""
+
+    generation_parameters: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "provider", require_non_empty_str(self.provider, "provider")
+        )
+        object.__setattr__(
+            self, "model", require_non_empty_str(self.model, "model")
+        )
+        if self.model_revision is not None:
+            object.__setattr__(
+                self,
+                "model_revision",
+                require_non_empty_str(
+                    self.model_revision, "model_revision"
+                ),
+            )
+        for field_name in (
+            "prompt_id",
+            "prompt_version",
+            "prompt_hash",
+            "history_renderer_id",
+            "history_renderer_version",
+            "state_renderer_id",
+            "state_renderer_version",
+            "tool_schema_id",
+            "tool_schema_version",
+            "tool_schema_hash",
+        ):
+            object.__setattr__(
+                self,
+                field_name,
+                require_non_empty_str(getattr(self, field_name), field_name),
+            )
+        for field_name in ("prompt_hash", "tool_schema_hash"):
+            value = getattr(self, field_name)
+            is_sha256 = (
+                len(value) == 64
+                and all(c in "0123456789abcdef" for c in value)
+            )
+            if not is_sha256:
+                raise ContractValidationError(
+                    f"{field_name} must be a lowercase SHA-256 hex digest, "
+                    f"got {value!r}"
+                )
+        if self.history_renderer_id not in ALLOWED_HISTORY_RENDERERS:
+            raise ContractValidationError(
+                "history_renderer_id must be a registered renderer, one of "
+                f"{list(ALLOWED_HISTORY_RENDERERS)}, got "
+                f"{self.history_renderer_id!r}"
+            )
+        if self.state_renderer_id not in ALLOWED_STATE_RENDERERS:
+            raise ContractValidationError(
+                "state_renderer_id must be a registered renderer, one of "
+                f"{list(ALLOWED_STATE_RENDERERS)}, got "
+                f"{self.state_renderer_id!r}"
+            )
+        if self.tool_schema_id not in ALLOWED_TOOL_SCHEMA_IDS:
+            raise ContractValidationError(
+                "tool_schema_id must be a registered schema id, one of "
+                f"{list(ALLOWED_TOOL_SCHEMA_IDS)}, got "
+                f"{self.tool_schema_id!r}"
+            )
+        object.__setattr__(
+            self,
+            "generation_parameters",
+            dict(
+                require_json_dict(
+                    self.generation_parameters, "generation_parameters"
+                )
+            ),
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "provider": self.provider,
+            "model": self.model,
+            "prompt_id": self.prompt_id,
+            "prompt_version": self.prompt_version,
+            "prompt_hash": self.prompt_hash,
+            "history_renderer_id": self.history_renderer_id,
+            "history_renderer_version": self.history_renderer_version,
+            "state_renderer_id": self.state_renderer_id,
+            "state_renderer_version": self.state_renderer_version,
+            "tool_schema_id": self.tool_schema_id,
+            "tool_schema_version": self.tool_schema_version,
+            "tool_schema_hash": self.tool_schema_hash,
+            "generation_parameters": dict(self.generation_parameters),
+        }
+        if self.model_revision is not None:
+            payload["model_revision"] = self.model_revision
+        return payload
+
+    @classmethod
+    def from_dict(cls, data: Any) -> "DialogueModelIdentity":
+        data = expect_mapping(data, "DialogueModelIdentity")
+        try:
+            return cls(
+                provider=data["provider"],
+                model=data["model"],
+                model_revision=data.get("model_revision"),
+                prompt_id=data["prompt_id"],
+                prompt_version=data["prompt_version"],
+                prompt_hash=data["prompt_hash"],
+                history_renderer_id=data["history_renderer_id"],
+                history_renderer_version=data["history_renderer_version"],
+                state_renderer_id=data["state_renderer_id"],
+                state_renderer_version=data["state_renderer_version"],
+                tool_schema_id=data["tool_schema_id"],
+                tool_schema_version=data["tool_schema_version"],
+                tool_schema_hash=data["tool_schema_hash"],
+                generation_parameters=data.get("generation_parameters", {}),
+            )
+        except KeyError as exc:
+            raise ContractValidationError(
+                f"DialogueModelIdentity missing required field: {exc.args[0]}"
+            ) from exc
+
 @dataclass(frozen=True)
 class ExperimentManifest:
     """Describes one experiment: which cases, which system, which evaluator.
@@ -317,6 +502,9 @@ class ExperimentManifest:
     payload when ``None``). Phase 3B applies the same rule to
     ``dialogue``: absent or null stays out of the fingerprint payload,
     so every Phase 0–2G fingerprint is preserved bit-identically.
+    Phase 3D applies it once more to ``dialogue_model``
+    (``DialogueModelIdentity``): absent stays out, so every
+    Phase 0–3B fingerprint is preserved bit-identically.
     """
 
     schema_version: str
@@ -334,6 +522,7 @@ class ExperimentManifest:
     reranker: Optional[RerankerConfig] = None
     memory: Optional[MemoryConfig] = None
     dialogue: Optional[DialogueHarnessConfig] = None
+    dialogue_model: Optional[DialogueModelIdentity] = None
 
     evaluator_id: str = ""
     evaluator_version: str = ""
@@ -395,6 +584,14 @@ class ExperimentManifest:
             object.__setattr__(
                 self, "dialogue", DialogueHarnessConfig.from_dict(self.dialogue)
             )
+        if self.dialogue_model is not None and not isinstance(
+            self.dialogue_model, DialogueModelIdentity
+        ):
+            object.__setattr__(
+                self,
+                "dialogue_model",
+                DialogueModelIdentity.from_dict(self.dialogue_model),
+            )
         object.__setattr__(
             self,
             "evaluator_id",
@@ -440,6 +637,11 @@ class ExperimentManifest:
         # and enters the experiment identity.
         if self.dialogue is not None:
             payload["dialogue"] = self.dialogue.to_dict()
+        # Phase 3D: omit-when-None keeps all pre-3D fingerprints
+        # bit-identical; a declared real-LLM dialogue identity is
+        # result-affecting and enters the experiment identity.
+        if self.dialogue_model is not None:
+            payload["dialogue_model"] = self.dialogue_model.to_dict()
         return payload
 
     def config_fingerprint(self) -> str:
@@ -467,6 +669,11 @@ class ExperimentManifest:
             "dialogue": (
                 self.dialogue.to_dict() if self.dialogue is not None else None
             ),
+            "dialogue_model": (
+                self.dialogue_model.to_dict()
+                if self.dialogue_model is not None
+                else None
+            ),
             "evaluator_id": self.evaluator_id,
             "evaluator_version": self.evaluator_version,
             "random_seed": self.random_seed,
@@ -490,6 +697,7 @@ class ExperimentManifest:
                 reranker=data.get("reranker"),
                 memory=data.get("memory"),
                 dialogue=data.get("dialogue"),
+                dialogue_model=data.get("dialogue_model"),
                 evaluator_id=data["evaluator_id"],
                 evaluator_version=data["evaluator_version"],
                 random_seed=data.get("random_seed", 0),
@@ -515,7 +723,13 @@ class ExperimentManifest:
 
 
 __all__ = [
+    "ALLOWED_HISTORY_POLICIES",
+    "ALLOWED_HISTORY_RENDERERS",
+    "ALLOWED_STATE_RENDERERS",
+    "ALLOWED_TOOL_POLICIES",
+    "ALLOWED_TOOL_SCHEMA_IDS",
     "DialogueHarnessConfig",
+    "DialogueModelIdentity",
     "ExperimentManifest",
     "MemoryConfig",
     "ModelConfig",

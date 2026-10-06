@@ -465,6 +465,60 @@ the I/O and trace contracts but must stay empty. Prompt identity
 (prompt template/version fingerprinted via `model.parameters`) is a
 BLOCKER before Phase 3C adds a real LLM dialogue baseline.
 
+## Phase 3D — Dialogue Identity & Integrity Hardening
+
+Hardening between the deterministic baseline and the first real LLM
+adapter. The dialogue runtime now binds the executed harness
+configuration to the fingerprinted experiment configuration: a
+manifest must carry `dialogue`, the harness is built from exactly
+that config, and any mismatch fails closed before the case runs —
+runtime metadata stays observability, never a substitute.
+
+- `tool_policy` is a closed registry (`direct-tools-v0`,
+  `lookup-before-mutate-v0`). Unknown labels are rejected at config
+  validation, and each policy changes runtime behavior:
+  `lookup-before-mutate-v0` rejects state-changing calls for an
+  `order_id` that lacks an earlier successful `lookup_order` in the
+  same dialogue, recording `POLICY_PRECONDITION_FAILED` ToolEvents
+  instead of silently ignoring the fingerprinted knob.
+- Dialogue history and trace evidence are defensively snapshotted so
+  the system under test cannot mutate persisted evidence: every
+  `DialogueTurnInput` carries deep-copied history entries, state view,
+  and tool descriptors, and executed `ToolEvent`s are stored as
+  independent snapshots per boundary (step trace, history, turn
+  aggregate). `history_digest` is computed over the exact defensive
+  input snapshot the system received.
+- Provider-visible prompt, history rendering, state rendering, tool
+  schema, model revision, and generation parameters have explicit
+  result-affecting identities via `ExperimentManifest.dialogue_model`
+  (`DialogueModelIdentity`). `prompt_hash` and `tool_schema_hash` are
+  SHA-256 digests of canonical text/descriptors; renderer ids and the
+  tool schema id are closed vocabularies; `validate_dialogue_identity`
+  fails closed when a declared identity does not match the runtime
+  binding. Omit-when-`null` keeps every Phase 0–3B fingerprint
+  bit-identical.
+- Completion semantics are aligned with the evaluator:
+  `expected_state_delta` means "this turn must newly cause the
+  change", so `completed` requires every declared delta obligation to
+  be satisfied as newly caused (shared
+  `delta_obligations_satisfied` predicate). A case with empty
+  `expected_final_state` and no tool/delta obligations is rejected —
+  there is no silent observation-only mode.
+- JSON leaf comparison is type-strict: `True != 1` (booleans are not
+  numbers) while `1 == 1.0` (the JSON number domain is unified). The
+  same rule drives harness completion, evaluator final-state and
+  delta checks, and expected-tool argument matching.
+- User-turn release is an ordered scan: the first unconsumed turn
+  whose activation is satisfied fires, so a later default-activation
+  turn can leapfrog an earlier gated turn whose condition is unmet.
+  `invalid_tool` remains declared vocabulary but is unreachable — the
+  harness records failed calls as `status="error"` ToolEvents and
+  continues.
+
+Phase 3D performs no real LLM inference — no SDK, API client, model
+download, or HTTP call. Phase 3E will be the first real LLM dialogue
+baseline.
+
 ## Development
 
 Requires Python 3.10+. Installing the package pulls the pinned

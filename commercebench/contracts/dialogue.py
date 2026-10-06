@@ -52,6 +52,9 @@ TERMINATION_COMPLETED = "completed"
 TERMINATION_USER_DONE = "user_done"
 TERMINATION_MAX_TURNS = "max_turns"
 TERMINATION_TOOL_LIMIT = "tool_limit"
+# Declared for vocabulary completeness: the current harness records a
+# failed tool call as a ``status="error"`` ToolEvent inside the step
+# and continues — it never emits ``invalid_tool`` as a termination.
 TERMINATION_INVALID_TOOL = "invalid_tool"
 TERMINATION_SYSTEM_ERROR = "system_error"
 
@@ -354,6 +357,24 @@ class DialogueCaseSpec:
         object.__setattr__(
             self, "metadata", dict(require_json_dict(self.metadata, "metadata"))
         )
+        # Phase 3D: a case needs at least one deterministic
+        # task-completion obligation. With an empty
+        # ``expected_final_state`` and no tool/delta expectations the
+        # harness would report ``completed`` after the first turn,
+        # which is a contract bug — reject it instead of inventing an
+        # observation-only mode.
+        if not self.expected_final_state:
+            has_obligation = any(
+                t.expected_tool_calls or t.expected_state_delta
+                for t in self.turns
+            )
+            if not has_obligation:
+                raise ContractValidationError(
+                    "dialogue case has no deterministic completion "
+                    "obligation: expected_final_state is empty and no "
+                    "turn declares expected_tool_calls or "
+                    "expected_state_delta"
+                )
 
     def to_dict(self) -> Dict[str, Any]:
         return {

@@ -52,7 +52,11 @@ from commercebench.contracts.dialogue import (
 from commercebench.contracts.evaluation import EvaluationResult, MetricResult
 from commercebench.contracts.trace import ToolEvent
 from commercebench.dialogue.state import (
+    delta_obligations_satisfied,
+    json_leaf_equal,
+    json_value_equal,
     split_delta_obligations,
+    state_leaf_at,
     state_subset_matches,
     state_subset_mismatches,
 )
@@ -205,6 +209,15 @@ class DialogueEvaluator:
         satisfied = 0
         for spec in case.turns:
             trace = turn_traces.get(spec.turn_id)
+            # Shared with the harness completion predicate: the turn is
+            # satisfied only when every leaf is newly caused.
+            turn_satisfied = trace is not None and (
+                delta_obligations_satisfied(
+                    spec.expected_state_delta,
+                    trace.state_before,
+                    trace.state_after,
+                )
+            )
             for path, leaf in split_delta_obligations(
                 spec.expected_state_delta
             ):
@@ -215,21 +228,22 @@ class DialogueEvaluator:
                     "satisfied": False,
                 }
                 if trace is not None:
-                    leaf_ok_after = _leaf_subset_match(
-                        spec.expected_state_delta,
-                        trace.state_after,
-                        path,
-                        leaf,
+                    present_after, after = state_leaf_at(
+                        trace.state_after, path
                     )
-                    leaf_ok_before = _leaf_subset_match(
-                        spec.expected_state_delta,
-                        trace.state_before,
-                        path,
-                        leaf,
+                    present_before, before = state_leaf_at(
+                        trace.state_before, path
+                    )
+                    leaf_ok_after = present_after and json_leaf_equal(
+                        after, leaf
+                    )
+                    leaf_ok_before = present_before and json_leaf_equal(
+                        before, leaf
                     )
                     if leaf_ok_after and not leaf_ok_before:
                         satisfied += 1
                         entry["satisfied"] = True
+                entry["turn_satisfied"] = turn_satisfied
                 obligations.append(entry)
         if not obligations:
             return (
@@ -273,8 +287,8 @@ class DialogueEvaluator:
                         continue
                     if event.status != "ok":
                         continue
-                    if expected.arguments is not None and (
-                        event.arguments != expected.arguments
+                    if expected.arguments is not None and not (
+                        json_value_equal(event.arguments, expected.arguments)
                     ):
                         continue
                     matched = True
@@ -422,21 +436,6 @@ def _assistant_texts(
         for turn in turns
         for step in turn.steps
     ]
-
-
-def _leaf_subset_match(
-    delta: Dict[str, Any],
-    state: Dict[str, Any],
-    path: str,
-    leaf: Any,
-) -> bool:
-    """Check whether one flattened delta leaf holds in ``state``."""
-    current: Any = state
-    for segment in path.split("."):
-        if not isinstance(current, dict) or segment not in current:
-            return False
-        current = current[segment]
-    return current == leaf
 
 
 __all__ = [

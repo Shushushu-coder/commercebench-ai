@@ -38,7 +38,7 @@ def _parameters(**overrides):
         "max_turns": 6,
         "max_tool_calls_per_turn": 3,
         "history_policy": "full",
-        "tool_policy": "deterministic-commerce-v0",
+        "tool_policy": "direct-tools-v0",
         "tool_simulator": {"id": "commerce-tools-v0", "version": "0.1"},
     }
     parameters.update(overrides)

@@ -153,8 +153,10 @@ class TestStateDeltaCoverage:
         assert result.metrics["state_delta_coverage"].value == 1.0
 
     def test_no_obligations_not_applicable(self, evaluator):
-        case = _case([_spec("t1")], {}, {})
-        trace = _trace([_turn_trace("t1", 1, {}, {})], {})
+        # A non-degenerate case (final-state obligation) can still have
+        # no delta obligations at all.
+        case = _case([_spec("t1")], {}, {"done": True})
+        trace = _trace([_turn_trace("t1", 1, {}, {})], {"done": True})
         result = evaluator.evaluate(case, trace)
         metric = result.metrics["state_delta_coverage"]
         assert metric.passed is None
@@ -221,15 +223,15 @@ class TestToolCoverage:
         assert result.metrics["required_tool_coverage"].passed is False
 
     def test_no_obligations_not_applicable(self, evaluator):
-        case = _case([_spec("t1")], {}, {})
-        trace = _trace([_turn_trace("t1", 1, {}, {})], {})
+        case = _case([_spec("t1")], {}, {"done": True})
+        trace = _trace([_turn_trace("t1", 1, {}, {})], {"done": True})
         result = evaluator.evaluate(case, trace)
         assert result.metrics["required_tool_coverage"].passed is None
 
 
 class TestInvalidToolCalls:
     def test_error_events_counted(self, evaluator):
-        case = _case([_spec("t1")], {}, {})
+        case = _case([_spec("t1")], {}, {"done": True})
         trace = _trace(
             [_turn_trace(
                 "t1", 1, {}, {},
@@ -252,7 +254,7 @@ class TestInvalidToolCalls:
 class TestClaimsAndFacts:
     def test_forbidden_claim_in_any_step_counts(self, evaluator):
         case = _case(
-            [_spec("t1")], {}, {},
+            [_spec("t1")], {}, {"done": True},
             forbidden_claims=("free money",),
         )
         trace = _trace(
@@ -277,7 +279,7 @@ class TestClaimsAndFacts:
                 _spec("t1"),
                 _spec("t2", forbidden_claims=("oops",)),
             ],
-            {}, {},
+            {}, {"done": True},
         )
         # claim appears in t1's output — turn-scoped to t2, so no hit
         trace = _trace(
@@ -296,7 +298,7 @@ class TestClaimsAndFacts:
                 _spec("t1"),
                 _spec("t2", required_facts=("order-id",)),
             ],
-            {}, {},
+            {}, {"done": True},
         )
         # fact stated in t1 (before the t2 obligation) — not satisfied
         early = _trace(
@@ -323,7 +325,7 @@ class TestClaimsAndFacts:
     def test_case_fact_anywhere(self, evaluator):
         case = _case(
             [_spec("t1"), _spec("t2")],
-            {}, {},
+            {}, {"done": True},
             required_facts=("the-fact",),
         )
         trace = _trace(
@@ -366,8 +368,8 @@ class TestMultiLabelAndNoScore:
         }
 
     def test_no_overall_score_metric(self, evaluator):
-        case = _case([_spec("t1")], {}, {})
-        trace = _trace([_turn_trace("t1", 1, {}, {})], {})
+        case = _case([_spec("t1")], {}, {"done": True})
+        trace = _trace([_turn_trace("t1", 1, {}, {})], {"done": True})
         result = evaluator.evaluate(case, trace)
         for name in result.metrics:
             assert "score" not in name

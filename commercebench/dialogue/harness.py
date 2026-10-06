@@ -49,28 +49,54 @@ from commercebench.contracts.errors import ContractValidationError
 from commercebench.contracts.experiment import ExperimentManifest
 from commercebench.contracts.trace import ToolEvent, UsageStats
 
-from .state import json_state_copy, state_subset_matches
-from .tools import CommerceToolSimulator
+from .identity import runtime_identity_metadata
+from .policy import (
+    TOOL_POLICY_DIRECT,
+    evaluate_tool_call,
+    validate_tool_policy,
+)
+from .state import (
+    delta_obligations_satisfied,
+    json_state_copy,
+    json_value_copy,
+    json_value_equal,
+    state_subset_matches,
+)
+from .tools import (
+    CommerceToolSimulator,
+    TOOL_DESCRIPTORS,
+    TOOL_LOOKUP_ORDER,
+)
 
 DEFAULT_MAX_TURNS = 6
 DEFAULT_MAX_TOOL_CALLS_PER_TURN = 3
 DEFAULT_HISTORY_POLICY = "full"
+DEFAULT_TOOL_POLICY = TOOL_POLICY_DIRECT
 
-TOOL_DESCRIPTORS: Tuple[DialogueToolDescriptor, ...] = (
-    DialogueToolDescriptor(
-        name="lookup_order",
-        description="Return the stored order record for an order id.",
-        argument_schema={"order_id": "string"},
-    ),
-    DialogueToolDescriptor(
-        name="request_return",
-        description=(
-            "Request a return for a delivered, returnable order that "
-            "has no existing return."
+
+def _tool_event_snapshot(event: ToolEvent) -> ToolEvent:
+    """Deep-copied ToolEvent: nested ``arguments``/``result`` payloads
+    are independent objects so no two persisted/shared views of one
+    call alias the same mutable dicts."""
+    return ToolEvent(
+        tool_name=event.tool_name,
+        arguments=json_value_copy(event.arguments),
+        result=json_value_copy(event.result),
+        status=event.status,
+        error=event.error,
+    )
+
+
+def _history_entry_snapshot(entry: DialogueHistoryEntry) -> DialogueHistoryEntry:
+    """Deep-copied history entry: mutable ``content`` and every nested
+    ``tool_events`` payload become independent objects."""
+    return DialogueHistoryEntry(
+        role=entry.role,
+        content=json_value_copy(entry.content),
+        tool_events=tuple(
+            _tool_event_snapshot(event) for event in entry.tool_events
         ),
-        argument_schema={"order_id": "string"},
-    ),
-)
+    )
 
 
 class DialogueHarness:
@@ -102,7 +128,9 @@ class DialogueHarness:
             raise ContractValidationError(
                 f"unsupported history_policy {self.history_policy!r}"
             )
-        self.tool_policy = parameters.get("tool_policy")
+        self.tool_policy = validate_tool_policy(
+            parameters.get("tool_policy", DEFAULT_TOOL_POLICY)
+        )
         simulator_identity = parameters.get("tool_simulator") or {}
         simulator = tool_simulator or CommerceToolSimulator()
         if simulator_identity:
@@ -125,13 +153,21 @@ class DialogueHarness:
         manifest: ExperimentManifest,
         system: Any,
     ) -> DialogueRunTrace:
-        """Run one dialogue case end-to-end and return its trace."""
+        """Run one dialogue case end-to-end and return its trace.
+
+        Fail closed before any turn executes: the manifest must carry a
+        ``dialogue`` config and this harness must have been built from
+        exactly that config — one source of truth for the fingerprinted
+        orchestration parameters.
+        """
+        self._validate_harness_binding(manifest)
         self._validate_case_against_manifest(case, manifest)
         state = json_state_copy(case.initial_state)
         initial_state = json_state_copy(case.initial_state)
         history: List[DialogueHistoryEntry] = []
         consumed: Set[str] = set()
         successful_tools: Set[str] = set()
+        successful_lookups: Set[str] = set()
         emitted_tags: Set[str] = set()
         turn_traces: List[DialogueTurnTrace] = []
         total_usage = _usage_zero()
@@ -159,6 +195,7 @@ class DialogueHarness:
                 activation_evidence=evidence,
                 state=state,
                 history=history,
+                successful_lookups=successful_lookups,
                 system=system,
             )
             if turn_result[0] is None:
@@ -224,6 +261,9 @@ class DialogueHarness:
                         "version": self.tool_simulator.simulator_version,
                     },
                 },
+                "identity": runtime_identity_metadata(
+                    manifest.dialogue_model
+                ),
                 "consumed_turn_ids": [t.turn_id for t in turn_traces],
             },
         )
@@ -238,6 +278,13 @@ class DialogueHarness:
         emitted_tags: Set[str],
     ) -> Tuple[Optional[DialogueTurnSpec], Dict[str, Any]]:
         """First unconsumed turn whose activation is satisfied.
+
+        Ordered scan semantics (fixed, Phase 3D documented): the case's
+        ``turns`` are scanned in declaration order and the first
+        unconsumed turn whose activation is satisfied fires. A later
+        turn with default activation therefore releases *before* an
+        earlier gated turn whose condition is not yet met — gating
+        skips a turn for now, it does not block the sequence.
 
         ``activation`` ``None``/``{}`` is the default trigger: it
         requires no prior signal, so it fires whenever reached in case
@@ -273,12 +320,20 @@ class DialogueHarness:
         activation_evidence: Dict[str, Any],
         state: Dict[str, Any],
         history: List[DialogueHistoryEntry],
+        successful_lookups: Set[str],
         system: Any,
     ):
         """Execute one user turn: system invocation + bounded tool loop.
 
         Returns ``(None, "system_error")`` on unrecoverable system
         failure, otherwise a tuple with the finished turn trace.
+
+        Integrity boundaries (Phase 3D): the system's ``DialogueTurnInput``
+        holds only deep-copied snapshots of the stored history and
+        tool descriptors; every executed ``ToolEvent`` is recorded via
+        independent snapshots for the step trace, the history, and the
+        turn-level aggregate. Nothing the system can mutate is shared
+        with persisted evidence or future inputs.
         """
         state_before = json_state_copy(state)
         history.append(
@@ -299,9 +354,14 @@ class DialogueHarness:
             turn_input = DialogueTurnInput(
                 turn_id=spec.turn_id,
                 user_input=spec.user_input,
-                history=tuple(history),
+                history=tuple(
+                    _history_entry_snapshot(entry) for entry in history
+                ),
                 state_view=json_state_copy(state),
-                available_tools=TOOL_DESCRIPTORS,
+                available_tools=tuple(
+                    DialogueToolDescriptor.from_dict(d.to_dict())
+                    for d in TOOL_DESCRIPTORS
+                ),
             )
             digest = turn_input.input_context_digest()
             step_start = datetime.now(timezone.utc)
@@ -326,6 +386,27 @@ class DialogueHarness:
             dropped = list(output.tool_calls[remaining_budget:])
             new_events: List[ToolEvent] = []
             for call in to_execute:
+                # Policy gate (Phase 3D): a rejected call is recorded
+                # with status="error" and never reaches the simulator,
+                # so canonical state cannot change.
+                rejection = evaluate_tool_call(
+                    self.tool_policy,
+                    call.tool_name,
+                    call.arguments,
+                    successful_lookups,
+                )
+                if rejection is not None:
+                    new_events.append(
+                        ToolEvent(
+                            tool_name=call.tool_name,
+                            arguments=json_value_copy(call.arguments),
+                            result=rejection,
+                            status="error",
+                            error=rejection["error_code"],
+                        )
+                    )
+                    tool_calls_executed += 1
+                    continue
                 execution = self.tool_simulator.call(
                     call.tool_name, call.arguments, state
                 )
@@ -333,8 +414,8 @@ class DialogueHarness:
                 new_events.append(
                     ToolEvent(
                         tool_name=call.tool_name,
-                        arguments=dict(call.arguments),
-                        result=execution.result,
+                        arguments=json_value_copy(call.arguments),
+                        result=json_value_copy(execution.result),
                         status=execution.status,
                         error=execution.error,
                     )
@@ -342,9 +423,18 @@ class DialogueHarness:
                 tool_calls_executed += 1
                 if execution.status == "ok":
                     turn_successful.add(call.tool_name)
+                    if (
+                        call.tool_name == TOOL_LOOKUP_ORDER
+                        and isinstance(
+                            call.arguments.get("order_id"), str
+                        )
+                    ):
+                        successful_lookups.add(
+                            call.arguments["order_id"]
+                        )
             executed_events.extend(new_events)
 
-            step_metadata = dict(output.runtime_metadata)
+            step_metadata = json_value_copy(output.runtime_metadata)
             if dropped:
                 step_metadata["tool_calls_not_executed"] = len(dropped)
                 step_metadata["terminated_by"] = "tool_limit"
@@ -352,8 +442,10 @@ class DialogueHarness:
                 DialogueStepTrace(
                     step_index=step_index,
                     output_text=output.output_text,
-                    assistant_tags=output.assistant_tags,
-                    tool_events=tuple(new_events),
+                    assistant_tags=tuple(output.assistant_tags),
+                    tool_events=tuple(
+                        _tool_event_snapshot(e) for e in new_events
+                    ),
                     history_digest=digest,
                     usage=output.usage,
                     latency_ms=(
@@ -368,14 +460,19 @@ class DialogueHarness:
                 DialogueHistoryEntry(
                     role="assistant",
                     content=output.output_text,
-                    tool_events=tuple(new_events),
+                    tool_events=tuple(
+                        _tool_event_snapshot(e) for e in new_events
+                    ),
                 )
             )
             if new_events:
                 history.append(
                     DialogueHistoryEntry(
                         role="tool",
-                        content=[e.to_dict() for e in new_events],
+                        content=[
+                            _tool_event_snapshot(e).to_dict()
+                            for e in new_events
+                        ],
                     )
                 )
             if dropped:
@@ -422,10 +519,25 @@ class DialogueHarness:
     ) -> bool:
         if not state_subset_matches(case.expected_final_state, state):
             return False
+        traces_by_turn: Dict[str, DialogueTurnTrace] = {
+            t.turn_id: t for t in turn_traces
+        }
         events_by_turn: Dict[str, List[ToolEvent]] = {
             t.turn_id: list(t.tool_events) for t in turn_traces
         }
         for spec in case.turns:
+            # Phase 3D: ``expected_state_delta`` means "this turn must
+            # newly cause this change" — the same predicate the
+            # evaluator scores, so ``completed`` can no longer mask an
+            # unsatisfied delta obligation.
+            if spec.expected_state_delta:
+                trace = traces_by_turn.get(spec.turn_id)
+                if trace is None or not delta_obligations_satisfied(
+                    spec.expected_state_delta,
+                    trace.state_before,
+                    trace.state_after,
+                ):
+                    return False
             if not spec.expected_tool_calls:
                 continue
             executed = events_by_turn.get(spec.turn_id, [])
@@ -439,8 +551,8 @@ class DialogueHarness:
                         continue
                     if event.status != "ok":
                         continue
-                    if expected.arguments is not None and (
-                        event.arguments != expected.arguments
+                    if expected.arguments is not None and not (
+                        json_value_equal(event.arguments, expected.arguments)
                     ):
                         continue
                     consumed_positions.add(position)
@@ -468,15 +580,46 @@ class DialogueHarness:
             )
 
 
+    def _validate_harness_binding(
+        self, manifest: ExperimentManifest
+    ) -> None:
+        """Phase 3D: the executed harness must be exactly the
+        fingerprinted ``manifest.dialogue`` config — canonical
+        ``to_dict`` equality, fail closed before any case work."""
+        if manifest.dialogue is None:
+            raise ContractValidationError(
+                "manifest.dialogue is required for a formal dialogue "
+                "run; no hidden harness defaults are applied"
+            )
+        if self._config is None:
+            raise ContractValidationError(
+                "DialogueHarness(config=None) cannot execute a formal "
+                "dialogue run; build it from manifest.dialogue"
+            )
+        if not hasattr(self._config, "to_dict"):
+            raise ContractValidationError(
+                "harness config must be a DialogueHarnessConfig"
+            )
+        if not json_value_equal(
+            self._config.to_dict(), manifest.dialogue.to_dict()
+        ):
+            raise ContractValidationError(
+                "harness config does not match manifest.dialogue; the "
+                "fingerprinted configuration is the only permitted "
+                "source of orchestration parameters"
+            )
+
+
 def run_dialogue_case(
     case: DialogueCaseSpec,
     manifest: ExperimentManifest,
     system: Any,
-    harness: Optional[DialogueHarness] = None,
 ) -> DialogueRunTrace:
-    """Convenience wrapper mirroring ``run_case``: one case → trace."""
-    active = harness or DialogueHarness(config=manifest.dialogue)
-    return active.run(case, manifest, system)
+    """Formal entry point: build the harness from the fingerprinted
+    ``manifest.dialogue`` (the single source of truth) and run one
+    case to its trace. ``manifest.dialogue=None`` fails closed."""
+    harness = DialogueHarness(config=manifest.dialogue)
+    return harness.run(case, manifest, system)
 
 
 def _usage_zero() -> UsageStats:
@@ -500,6 +643,7 @@ __all__ = [
     "DEFAULT_HISTORY_POLICY",
     "DEFAULT_MAX_TOOL_CALLS_PER_TURN",
     "DEFAULT_MAX_TURNS",
+    "DEFAULT_TOOL_POLICY",
     "DialogueHarness",
     "TOOL_DESCRIPTORS",
     "run_dialogue_case",

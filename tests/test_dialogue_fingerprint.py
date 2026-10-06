@@ -41,7 +41,7 @@ DIALOGUE_PARAMETERS = {
     "max_turns": 6,
     "max_tool_calls_per_turn": 3,
     "history_policy": "full",
-    "tool_policy": "deterministic-commerce-v0",
+    "tool_policy": "direct-tools-v0",
     "tool_simulator": {"id": "commerce-tools-v0", "version": "0.1"},
 }
 
@@ -149,7 +149,7 @@ class TestDialogueFingerprintMutations:
     def test_tool_policy_mutation(self):
         a = _manifest(dialogue=_dialogue_config())
         b = _manifest(
-            dialogue=_dialogue_config(tool_policy="deterministic-commerce-v1")
+            dialogue=_dialogue_config(tool_policy="lookup-before-mutate-v0")
         )
         assert a.config_fingerprint() != b.config_fingerprint()
 
