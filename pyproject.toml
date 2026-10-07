@@ -9,6 +9,7 @@ description = "A reproducible benchmark and experimentation platform for evaluat
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "openai==3.24.0",
     "sentence-transformers==6.1.0",
 ]
 
@@ -24,5 +25,6 @@ include = ["commercebench*"]
 testpaths = ["tests"]
 markers = [
     "integration: tests that download and load the real pinned sentence-transformers model (excluded from the default run)",
+    "live_llm: tests that call the real OpenAI Responses API (excluded from the default run; require OPENAI_API_KEY and COMMERCEBENCH_OPENAI_MODEL)",
 ]
-addopts = "-m 'not integration'"
+addopts = "-m 'not integration and not live_llm'"

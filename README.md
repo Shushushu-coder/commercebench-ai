@@ -519,12 +519,82 @@ Phase 3D performs no real LLM inference — no SDK, API client, model
 download, or HTTP call. Phase 3E will be the first real LLM dialogue
 baseline.
 
+## Phase 3E — Real LLM Dialogue Adapter (offline implementation)
+
+Phase 3E-A implements the complete offline side of the first real
+provider path. **The offline implementation is complete; no live
+baseline has been executed — `OPENAI_API_KEY` is intentionally not
+configured yet.**
+
+- `OpenAIDialogueSystem` (`commercebench/systems/openai.py`) is a thin
+  `DialogueSystemUnderTest` translation layer: it validates the
+  declared `DialogueModelIdentity`, renders the request, sends it
+  through an injected Responses client, and parses the payload into
+  text + tool proposals + usage. It never mutates canonical state,
+  executes tools, selects turns, or owns conversation state.
+- Transport seam (`commercebench/providers/`): `ResponsesClientProtocol`
+  is the narrow injectable contract; `OpenAIResponsesClient` wraps the
+  official `openai` SDK (`responses.create`) with lazy credential
+  resolution and a provider error taxonomy
+  (`ProviderCredentialError`, `ProviderAuthenticationError`,
+  `ProviderTransportError`, `ProviderTimeoutError`,
+  `ProviderRateLimitError`, `ProviderServerError`,
+  `ProviderInvalidRequestError`, `ProviderResponseError`) that stays
+  strictly outside the benchmark failure categories;
+  `ScriptedResponsesClient` captures exact outgoing requests and
+  returns synthetic payloads for fully offline exercise.
+- The Phase 3D `DialogueModelIdentity` is reused unchanged — no
+  parallel identity structure. The adapter binds `prompt_hash` (of the
+  prompt text actually sent), the registered
+  `full-history-messages-v0` / `state-json-v0` renderers (now
+  implemented: faithful ordered history + a canonical-JSON developer
+  state block), the `commerce-tools-schema-v0` hash, and a closed
+  whitelist of Responses generation parameters — unsupported keys
+  fail closed, an explicit `model` is required with no default.
+- **No provider-native hidden session state**: every request is built
+  only from the current `DialogueTurnInput`. `previous_response_id`,
+  `conversation`, threads, assistants, and stored-prompt references
+  are never populated; `store=False` is always sent. Provider
+  `call_id`s are evidence only — follow-up requests re-derive them
+  deterministically so a persisted trace plus the renderer identity
+  reconstructs every request.
+- Provider output is proposals only: names/arguments are mapped to
+  `ToolEvent`s (arguments parsed strictly as JSON objects — malformed
+  input degrades to a deterministic invalid-tool path, never a repair
+  call); results/status/canonical state remain harness-owned.
+  `[[tag:name]]` markers in assistant text are stripped into
+  `assistant_tags` for activation gating.
+- `examples/dialogue_v0/prompts/openai_support_v0.txt` is the
+  checked-in baseline prompt (`openai-support-v0` `0.1`).
+- `examples/dialogue_v0/experiments/dialogue_openai_v0.json` is the
+  development manifest; `dialogue_model.model` is the placeholder
+  `__LIVE_MODEL_REQUIRED__` — the live runner requires `--model`
+  injection and refuses the placeholder, so the file can never reach
+  a provider as-is.
+- Live entry point (not executed in this phase):
+  `python -m commercebench.runner.openai_dialogue --manifest
+  examples/dialogue_v0/experiments/dialogue_openai_v0.json --model
+  <explicitly-verified-model> --out-dir <dir>` runs every manifest
+  case through the real harness/evaluator and persists traces for
+  offline replay. `OPENAI_API_KEY` is required only for these opt-in
+  live paths, resolved lazily at call time.
+- `live_llm` pytest marker: opt-in smoke tests (text, tool-call,
+  A/B/C runner) that `SKIP` without `OPENAI_API_KEY` and
+  `COMMERCEBENCH_OPENAI_MODEL`. The default suite is fully offline.
+
+The four remaining live gates — real text smoke, real function-call
+smoke, the real A/B/C baseline, and persisted real-trace offline
+replay — are deferred to Phase 3E-B once a credential and a verified
+model are available. No real API call, model benchmark, or live
+result is claimed here.
+
 ## Development
 
 Requires Python 3.10+. Installing the package pulls the pinned
-`sentence-transformers==6.1.0` runtime dependency (including torch);
-the embedding model itself is downloaded on first use, not at install
-time.
+`sentence-transformers==6.1.0` and `openai==3.24.0` runtime
+dependencies; the embedding model itself is downloaded on first use,
+not at install time. `OPENAI_API_KEY` is needed only for the opt-in
+`live_llm` tests and the live dialogue runner.
 
 ```powershell
 python -m venv .venv
@@ -532,6 +602,7 @@ python -m venv .venv
 pip install -e ".[dev]"
 python -m pytest                    # fast offline suite
 python -m pytest -m integration     # real pinned-model smoke
+python -m pytest -m live_llm        # real OpenAI smoke (needs credential)
 ```
 
 
@@ -544,6 +615,7 @@ commercebench/       core package
   reranking/         RerankCandidate, RerankResult, Identity/CrossEncoder rerankers
   benchmark/         benchmark definitions, scenarios, tasks
   systems/           systems under test (pipelines, agents, configs)
+  providers/         provider transport seams (OpenAI Responses)
   evaluation/        metrics, judges, scoring
   reporting/         experiment reporting and regression analysis
   dialogue/          deterministic stateful dialogue harness and tools

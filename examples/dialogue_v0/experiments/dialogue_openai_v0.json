@@ -1,0 +1,57 @@
+{
+  "schema_version": "0.1",
+  "experiment_id": "dialogue_openai_v0",
+  "experiment_name": "OpenAI Responses dialogue baseline v0 (live; model injected at run time)",
+  "benchmark_version": "commercebench-dev-0.1",
+  "case_ids": [
+    "dialogue-return-001",
+    "dialogue-order-status-001",
+    "dialogue-entity-001"
+  ],
+  "system_id": "openai-dialogue",
+  "system_version": "0.1",
+  "model": null,
+  "retrieval": null,
+  "memory": null,
+  "dialogue": {
+    "harness_id": "dialogue-harness-v0",
+    "harness_version": "0.1",
+    "parameters": {
+      "max_turns": 6,
+      "max_tool_calls_per_turn": 3,
+      "history_policy": "full",
+      "tool_policy": "lookup-before-mutate-v0",
+      "tool_simulator": {
+        "id": "commerce-tools-v0",
+        "version": "0.1"
+      }
+    }
+  },
+  "dialogue_model": {
+    "provider": "openai",
+    "model": "__LIVE_MODEL_REQUIRED__",
+    "prompt_id": "openai-support-v0",
+    "prompt_version": "0.1",
+    "prompt_hash": "c59f1739e7c0f0969aa884b552e60c0a8212debd5d89cc86fbe97e33dc16bd53",
+    "history_renderer_id": "full-history-messages-v0",
+    "history_renderer_version": "0.1",
+    "state_renderer_id": "state-json-v0",
+    "state_renderer_version": "0.1",
+    "tool_schema_id": "commerce-tools-schema-v0",
+    "tool_schema_version": "0.1",
+    "tool_schema_hash": "06849c6ccc18edc15e085acfa7d49d43d07fa0555818d4bbd752c2ffdaee6a2a",
+    "generation_parameters": {
+      "max_output_tokens": 1024,
+      "temperature": 0.0,
+      "top_p": 1.0
+    }
+  },
+  "evaluator_id": "dialogue-deterministic-v0",
+  "evaluator_version": "0.1",
+  "random_seed": 0,
+  "metadata": {
+    "fixture": "development only",
+    "phase": "3E",
+    "note": "model is a placeholder: the live runner requires --model injection; no live baseline has been executed"
+  }
+}
